@@ -1,0 +1,17 @@
+{
+    "chroma": {
+        "persist_directory": "/workspace/chroma_project/data/chroma"
+    },
+    "openai": {
+        "models": {
+            "embedding": "text-embedding-ada-002",
+            "analysis": {
+                "default": "gpt-4",
+                "settings": {
+                    "temperature": 0.0,
+                    "max_tokens": 1000
+                }
+            }
+        }
+    }
+} 
