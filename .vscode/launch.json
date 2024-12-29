@@ -1,0 +1,57 @@
+{
+   "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "1. Service: Run API Server",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": [],
+            "jinja": true,
+            "justMyCode": true,
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "2. DB: Initialize Database (Delete & Load)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/manage_chroma.py",
+            "args": ["--action", "reinit", "--force", "--debug"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "3. DB: Update Data (Add/Update)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/manage_chroma.py",
+            "args": ["--action", "update", "--debug"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "4. DB: View Status",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/manage_chroma.py",
+            "args": ["--action", "stats", "--debug"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ]
+}

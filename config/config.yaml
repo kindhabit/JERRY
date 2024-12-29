@@ -1,8 +1,6 @@
 chroma:
-  server_host: "10.0.1.10"
-  server_port: 8001
   collection_name: "health_docs"
-  persist_directory: "/workspace/chroma_project/data/chroma"
+  persist_directory: "data/chroma"
   chroma_api_impl: "chromadb.api.fastapi.FastAPI"
 
 fastapi:

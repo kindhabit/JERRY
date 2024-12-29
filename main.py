@@ -1,7 +1,6 @@
 import logging
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from modules.db.chroma_client import ChromaDBClient
-from langchain_openai import OpenAIEmbeddings
 from config.config_loader import CONFIG, get_health_keywords
 import os
 import resource
@@ -14,6 +13,8 @@ import json
 import psutil
 from modules.data_parser import DataParser, HealthData
 from fastapi.responses import JSONResponse
+import uvicorn
+import yaml
 
 # 메모리 제한 설정
 def limit_memory(max_mem_mb=1024):  # 1GB
@@ -27,7 +28,12 @@ def limit_memory(max_mem_mb=1024):  # 1GB
 chroma_client = ChromaDBClient()
 
 # FastAPI 서버 설정
-fastapi_config = CONFIG["fastapi"]
+def load_config():
+    with open('config/config.yaml', 'r') as file:
+        return yaml.safe_load(file)
+
+config = load_config()
+fastapi_config = config["fastapi"]
 
 # FastAPI 애플리케이션 초기화
 kindhabit_app = FastAPI()
@@ -161,7 +167,7 @@ async def analyze_interactions(
             "has_interactions": False
         }
     except Exception as e:
-        logger.error(f"상호작용 분석 중 오류 발생: {str(e)}")
+        logger.error(f"��호작용 분석 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @kindhabit_app.post("/api/analyze-health-data/final")
@@ -308,7 +314,7 @@ async def test_chroma(background_tasks: BackgroundTasks):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 추가 엔드포인트 - 사용자 답�� 처리용
+# 추가 엔드포인트 - 사용자 답변 처리용
 @kindhabit_app.post("/api/analyze-health-data/process-answers")
 async def process_user_answers(
     answers: List[str],
@@ -350,10 +356,10 @@ class MemoryMonitor:
             gc.collect()  # 가비지 컬렉션 실행
 
 if __name__ == "__main__":
-    import uvicorn
+    config = load_config()
     uvicorn.run(
         "main:kindhabit_app",
-        host=CONFIG["fastapi"]["server_host"],
-        port=CONFIG["fastapi"]["server_port"],
-        reload=True
+        host=config['fastapi']['server_host'],
+        port=config['fastapi']['server_port'],
+        log_level=config['fastapi']['log_level']
     )
