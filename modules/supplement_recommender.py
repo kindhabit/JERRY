@@ -5,6 +5,7 @@ from typing import Dict, List
 from modules.db.chroma_client import ChromaDBClient
 from langchain_openai import ChatOpenAI
 from modules.data_parser import HealthData
+import itertools
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +280,7 @@ class SupplementRecommender:
                 }
             }
             
-            # 7. 기존 ��이스 추천도 추가
+            # 7. 기존 이스 추천도 추가
             if health_metrics["cholesterol"]["total"] > 200:
                 analysis["recommendations"].append({
                     "category": "콜레스테롤 관리",
@@ -324,22 +325,23 @@ class SupplementRecommender:
             logger.error(f"건강 데이터 분석 실패: {str(e)}")
             raise
 
-    async def analyze_interactions(self, recommendations: List[Dict]) -> Dict:
-        """상호작용 분석 및 질문 생성"""
+    async def analyze_interactions(self, recommendations: Dict[str, List[str]]) -> Dict:
+        """2차 분석: 보충제 간 상호작용 분석"""
         try:
-            supplements = []
-            for rec in recommendations:
-                supplements.extend(rec.get("supplements", []))
-
-            if len(supplements) > 1:
-                interactions = await self.chroma_client.search_interactions(supplements)
-                return {
-                    "has_interactions": True,
-                    "interactions": interactions,
-                    "message": "잠재적 상호작용이 발견되어 추가 확인이 필요합니다."
-                }
-
-            return {"has_interactions": False}
+            interactions = []
+            for supp1, supp2 in itertools.combinations(recommendations.items(), 2):
+                supp1_info = get_supplement_with_aliases(supp1)
+                supp2_info = get_supplement_with_aliases(supp2)
+                
+                search_terms1 = [supp1_info["name"]] + supp1_info.get("aliases", [])
+                search_terms2 = [supp2_info["name"]] + supp2_info.get("aliases", [])
+                
+                for term1, term2 in itertools.product(search_terms1, search_terms2):
+                    interaction_data = await self._search_interactions(term1, term2)
+                    if interaction_data:
+                        interactions.append(interaction_data)
+            
+            return self._process_interactions(interactions)
             
         except Exception as e:
             logger.error(f"상호작용 분석 실패: {str(e)}")
@@ -364,7 +366,7 @@ class SupplementRecommender:
                     final_analysis["safety_notes_en"].append(
                         "Caution required for allergic reactions"
                     )
-                if "복용중 약���" in answer:
+                if "복용중 약" in answer:
                     final_analysis["safety_notes"].append(
                         "사와 상담 후 복용 권장"
                     )
@@ -422,34 +424,25 @@ class SupplementRecommender:
             logger.error(f"사용자 답변 처리 실패: {str(e)}")
             raise 
 
-    async def generate_recommendations(
-        self,
-        health_data: HealthData,
-        research_data: Dict
-    ) -> Dict:
-        """건강 데이터와 연구 결과를 기반으로 추천 생성"""
+    async def generate_recommendations(self, health_data, research_data):
+        """임베딩 검색 결과를 바탕으로 1차 추천"""
         try:
-            # 1. 건강 지표 기반 1차 추천
-            recommendations = await self._get_base_recommendations(health_data)
+            matched_conditions = []
+            for category in CONFIG["data_sources"]["pubmed"]["health_keywords"]:
+                for condition in category["conditions"]:
+                    if self._match_condition(health_data, condition):
+                        matched_conditions.append({
+                            "category": category["category"],
+                            "display_name": category["display_name"],
+                            "condition": condition
+                        })
+
+            recommendations = self._analyze_research_data(
+                research_data, 
+                matched_conditions
+            )
             
-            # 2. 상호작용 검토 필요 여부 확인
-            # 모든 추천된 영양제 목록 생성
-            all_supplements = []
-            for rec in recommendations:
-                all_supplements.extend(rec["supplements"])
-            
-            # 상호작용 검사
-            interaction_check = None
-            if len(all_supplements) > 1:
-                interactions = self.chroma_client.search_interactions(all_supplements)
-                if interactions["has_interactions"]:
-                    interaction_check = interactions
-            
-            return {
-                "status": "success",
-                "recommendations": recommendations,
-                "interaction_check": interaction_check
-            }
+            return recommendations
             
         except Exception as e:
             logger.error(f"추천 생성 실패: {str(e)}")

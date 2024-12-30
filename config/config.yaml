@@ -1,67 +1,96 @@
-chroma:
-  collection_name: "health_docs"
-  persist_directory: "data/chroma"
-  chroma_api_impl: "chromadb.api.fastapi.FastAPI"
+# 서비스 설정
+service:
+  chroma:
+    collection_name: "supplements"
+    host: "10.0.1.10"
+    port: 8001
+    chroma_api_impl: "rest"
+  
+  fastapi:
+    server_host: "0.0.0.0"
+    server_port: 3334
+    log_level: "info"
 
-fastapi:
-  server_host: "0.0.0.0"
-  server_port: 3334
-  log_level: "info"  # FastAPI 서버 로그 레벨
+# 데이터 소스 설정
+data_sources:
+  pubmed:
+    base_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+    timeout: 30
+    supplements:
+      - name: "Omega-3"
+        aliases: ["Fish oil", "EPA", "DHA"]
+      - name: "Vitamin D"
+        aliases: ["Vitamin D3", "Cholecalciferol"]
+      - name: "Magnesium"
+        aliases: ["Mg", "Magnesium citrate"]
+      - name: "Zinc"
+        aliases: ["Zn", "Zinc gluconate"]
+      - name: "Vitamin B12"
+        aliases: ["Cobalamin", "Methylcobalamin"]
 
-pubmed:
-  timeout: 30  # 추가
-  search_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-  fetch_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-  supplements:
-    - "probiotics"
-    - "omega-3"
-    - "magnesium"
-    - "green tea extract"
-    - "banana leaf extract"
-    - "milk thistle"
-    - "red yeast rice"
-  health_keywords:
-    - "blood pressure"
-    - "blood sugar"
-    - "BMI"
-    - "cholesterol"
-    - "gastric endoscopy"
-    - "colonoscopy polyps"
-    - "liver function test"
-    - "mammography"
+    health_keywords:
+      - category: "blood_pressure"
+        display_name: "혈압"
+        search_terms: ["blood pressure", "hypertension"]
+        conditions:
+          - name: "hypertension"
+            description: "고혈압"
+          - name: "hypotension"
+            description: "저혈압"
+          - name: "borderline_bp"
+            description: "경계성 혈압"
 
-text_analysis:
-  effect_patterns:
-    positive:
-      - "(?:significantly|effectively)\\s+(?:improved|increased|decreased|reduced)"
-      - "beneficial\\s+effect"
-      - "positive\\s+outcome"
-    negative:
-      - "adverse\\s+effects?"
-      - "side\\s+effects?"
-      - "complications?"
-      - "toxicity"
-  dosage_pattern: "(\\d+(?:\\.\\d+)?)\\s*(?:mg|g|mcg|IU)/(?:day|daily|kg)"
-  study_patterns:
-    RCT: "random(ized|ised)\\s+control(led)?\\s+trial"
-    meta_analysis: "meta[\\-\\s]analysis"
-    cohort: "cohort\\s+study"
-    case_control: "case[\\-\\s]control"
-    case_series: "case\\s+series"
+      - category: "blood_sugar"
+        display_name: "혈당"
+        search_terms: ["blood glucose", "blood sugar", "diabetes"]
+        conditions:
+          - name: "hyperglycemia"
+            description: "고혈당"
+          - name: "hypoglycemia"
+            description: "저혈당"
+          - name: "borderline_sugar"
+            description: "경계성 혈당"
 
-openai:
-  models:
-    embedding: "text-embedding-3-small"
-    analysis:
-      default: "gpt-4"
-      settings:
-        temperature: 0
-        max_tokens: 2000
-        streaming: true
-        verbose: false
-    extraction:
-      default: "gpt-4-turbo-preview"
-      settings:
-        temperature: 0.3
-        max_tokens: 1000
-        streaming: false
+      - category: "cholesterol"
+        display_name: "콜레스테롤"
+        search_terms: ["cholesterol", "lipids", "triglycerides"]
+        conditions:
+          - name: "hypercholesterolemia"
+            description: "콜레스테롤 높음"
+          - name: "ldl_high"
+            description: "LDL 높음"
+          - name: "hdl_low"
+            description: "HDL 낮음"
+
+    search_settings:
+      max_results: 100
+      date_range: "5years"
+      sort: "relevance"
+
+# 분석 설정
+analysis:
+  text:
+    patterns:
+      effect:
+        positive:
+          - "(?:significantly|effectively)\\s+(?:improved|increased|decreased|reduced)"
+          - "beneficial\\s+effect"
+          - "positive\\s+outcome"
+        negative:
+          - "adverse\\s+effects?"
+          - "side\\s+effects?"
+          - "complications?"
+          - "toxicity"
+      dosage: "(\\d+(?:\\.\\d+)?)\\s*(?:mg|g|mcg|IU)/(?:day|daily|kg)"
+      study_types:
+        RCT: "random(ized|ised)\\s+control(led)?\\s+trial"
+        meta_analysis: "meta[\\-\\s]analysis"
+        cohort: "cohort\\s+study"
+
+  openai:
+    models:
+      embedding: "text-embedding-3-small"
+      analysis:
+        default: "gpt-4-turbo-preview"
+        settings:
+          temperature: 0.1

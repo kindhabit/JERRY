@@ -15,6 +15,7 @@ from modules.data_parser import DataParser, HealthData
 from fastapi.responses import JSONResponse
 import uvicorn
 import yaml
+from config.config_loader import ConfigManager
 
 # 메모리 제한 설정
 def limit_memory(max_mem_mb=1024):  # 1GB
@@ -87,43 +88,14 @@ def read_root():
 
 @kindhabit_app.post("/api/analyze-request/")
 async def analyze_request(request: Request):
-    """건강 데이터 분석 요청 처리"""
-    try:
-        client_ip = request.client.host
-        
-        # 요청 데이터 로깅
-        raw_data = await request.json()
-        logger.info(f"Request Data: {json.dumps(raw_data, ensure_ascii=False, indent=2)}")
-        
-        # 데이터 파싱 및 검증
-        health_data = HealthData(**raw_data)
-        logger.info(f"Parsed health data: {health_data.model_dump_json(indent=2)}")
-        
-        # ChromaDB 검색
-        research_data = chroma_client.search_comprehensive(
-            query=health_data.query,
-            context=health_data.model_dump()
-        )
-        
-        # GPT 분석 및 추천
-        recommender = SupplementRecommender()
-        recommendations = await recommender.generate_recommendations(
-            health_data=health_data,
-            research_data=research_data
-        )
-        
-        return {
-            "status": "success",
-            "recommendations": recommendations,
-            "request_id": str(uuid.uuid4())
-        }
-        
-    except Exception as e:
-        logger.error(f"분석 요청 처리 중 오류 발생: {str(e)}")
-        logger.error(f"Failed data: {json.dumps(raw_data, ensure_ascii=False, indent=2)}")
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
+    config_manager = ConfigManager()
+    # 설정 기반 처리
+    pass
+
+@kindhabit_app.get("/api/health-categories/")
+async def get_health_categories():
+    config_manager = ConfigManager()
+    return config_manager.get_all_health_categories()
 
 @kindhabit_app.exception_handler(404)
 async def not_found_handler(request: Request, exc: HTTPException):
@@ -167,7 +139,7 @@ async def analyze_interactions(
             "has_interactions": False
         }
     except Exception as e:
-        logger.error(f"��호작용 분석 중 오류 발생: {str(e)}")
+        logger.error(f"상호작용 분석 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @kindhabit_app.post("/api/analyze-health-data/final")
