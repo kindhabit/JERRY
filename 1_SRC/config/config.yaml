@@ -1,0 +1,56 @@
+analysis:
+  openai:
+    models:
+      analysis:
+        default: gpt-4-turbo-preview
+        settings:
+          temperature: 0.1
+      embedding:
+        default: text-embedding-3-small
+
+
+service:
+  chroma:
+    host: "10.0.1.10"
+    port: 8001
+    chroma_api_impl: "rest"
+    settings:
+      anonymized_telemetry: false
+      allow_reset: true
+  openai:
+    chat:
+      model: gpt-4-turbo-preview
+      temperature: 0.1
+
+data_sources:
+  pubmed:
+    base_url: https://eutils.ncbi.nlm.nih.gov/entrez/eutils
+    search_strategies:
+      supplement:
+        - mechanism: "{name} mechanism of action"
+          interaction: "{name} drug interactions"
+          bioavailability: "{name} bioavailability absorption"
+          safety: "{name} safety adverse effects"
+          clinical: "{name} clinical trials efficacy"
+      health_keyword:
+        - pathophysiology: "{keyword} pathophysiology mechanism"
+          diagnosis: "{keyword} diagnosis clinical features"
+          treatment: "{keyword} treatment therapy management"
+          prevention: "{keyword} prevention risk factors"
+          nutrition: "{keyword} nutrition dietary factors"
+      interaction:
+        - drug_interaction: "{supp1} {supp2} interaction"
+          absorption: "{supp1} {supp2} absorption effect"
+          synergy: "{supp1} {supp2} synergistic effect"
+          metabolism: "{supp1} {supp2} metabolism pathway"
+      combined:
+        - effectiveness: "{supplement} effectiveness {health_keyword}"
+          dosage: "{supplement} dosage {health_keyword}"
+          warning: "{supplement} contraindication {health_keyword}"
+
+pubmed_settings:
+  base_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+  api_key: ""  # Optional
+  max_retries: 3
+  retry_delay: 1.0
+  timeout: 30.0

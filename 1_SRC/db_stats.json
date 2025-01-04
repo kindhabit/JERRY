@@ -1,0 +1,46 @@
+{
+  "supplements": {
+    "count": 0,
+    "metadata": {
+      "description": "\uc601\uc591\uc81c \uc815\ubcf4"
+    },
+    "embedding_quality": {
+      "quality_score": 0,
+      "error": "object dict can't be used in 'await' expression"
+    },
+    "last_updated": "2025-01-02T20:28:56.891927"
+  },
+  "interactions": {
+    "count": 0,
+    "metadata": {
+      "description": "\uc0c1\ud638\uc791\uc6a9 \uc815\ubcf4"
+    },
+    "embedding_quality": {
+      "quality_score": 0,
+      "error": "object dict can't be used in 'await' expression"
+    },
+    "last_updated": "2025-01-02T20:28:57.388280"
+  },
+  "health_data": {
+    "count": 0,
+    "metadata": {
+      "description": "\uac74\uac15 \ub370\uc774\ud130"
+    },
+    "embedding_quality": {
+      "quality_score": 0,
+      "error": "object dict can't be used in 'await' expression"
+    },
+    "last_updated": "2025-01-02T20:28:57.643171"
+  },
+  "health_metrics": {
+    "count": 0,
+    "metadata": {
+      "description": "\uac74\uac15 \uc9c0\ud45c"
+    },
+    "embedding_quality": {
+      "quality_score": 0,
+      "error": "object dict can't be used in 'await' expression"
+    },
+    "last_updated": "2025-01-02T20:28:57.956873"
+  }
+}

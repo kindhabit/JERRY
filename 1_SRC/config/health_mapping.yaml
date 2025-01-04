@@ -1,0 +1,442 @@
+# 통합 건강 매핑 설정
+
+# 1. 카테고리 정의
+categories:
+  cardiovascular:
+    name: Cardiovascular
+    display_name: 심혈관
+    description: 심장 및 혈관 관련 건강
+    related_metrics:
+      - blood_pressure
+      - cholesterol
+      - heart_rate
+      - blood_flow
+    search_terms:
+      - heart
+      - blood pressure
+      - cardiovascular
+      - circulation
+      - hypertension
+    medical_terms:
+      고혈압: Hypertension
+      심근경색: Myocardial infarction
+      부정맥: Arrhythmia
+      심부전: Heart failure
+      동맥경화: Atherosclerosis
+  
+  metabolic_endocrine:
+    name: Metabolic/Endocrine
+    display_name: 대사/내분비
+    description: 대사 작용 및 호르몬 체계
+    related_metrics:
+      - blood_sugar
+      - thyroid_function
+      - insulin
+      - metabolism_rate
+      - body_composition
+      - height
+      - weight
+      - waist_circumference
+    search_terms:
+      - metabolism
+      - hormone
+      - diabetes
+      - endocrine
+      - thyroid
+      - body composition
+      - anthropometry
+    medical_terms:
+      당뇨병: Diabetes mellitus
+      대사증후군: Metabolic syndrome
+      갑상선기능저하증: Hypothyroidism
+      갑상선기능항진증: Hyperthyroidism
+      비만: Obesity
+
+  digestive:
+    name: Digestive
+    display_name: 소화
+    description: 소화 기능 및 장 건강
+    related_metrics:
+      - liver_function
+      - gut_health
+      - digestive_enzymes
+      - gut_microbiome
+      - endoscopy_results
+    search_terms:
+      - digestion
+      - gut
+      - liver
+      - stomach
+      - intestine
+      - endoscopy
+    medical_terms:
+      위염: Gastritis
+      위궤양: Gastric ulcer
+      간염: Hepatitis
+      간경화: Cirrhosis
+      담석증: Cholelithiasis
+
+  kidney:
+    name: Kidney
+    display_name: 신장
+    description: 신장 기능 및 건강
+    related_metrics:
+      - creatinine
+      - gfr
+      - bun
+      - electrolyte_balance
+    search_terms:
+      - kidney
+      - renal
+      - creatinine
+      - filtration
+      - urine
+    medical_terms:
+      신부전: Renal failure
+      신장염: Nephritis
+      요로감염: Urinary tract infection
+      신장결석: Kidney stone
+      단백뇨: Proteinuria
+
+# 2. 영양제 정의
+supplements:
+  names:
+    비타민C: Vitamin C
+    오메가3: Omega-3
+    비타민D: Vitamin D
+    마그네슘: Magnesium
+    아연: Zinc
+    비타민B12: Vitamin B12
+    밀크씨슬: Milk Thistle
+    알파리포산: Alpha-lipoic acid
+
+pubmed:
+  categories:
+    # 기본 연구 유형
+    mechanism:
+      search_term: mechanism of action
+      weight: 1.2
+      description: 작용기전
+      group: research_type
+      search_strategies:
+        - mechanism_of_action
+        - molecular_mechanism
+        - pharmacological_action
+    
+    interaction:
+      search_term: drug interactions
+      weight: 1.4
+      description: 약물 상호작용
+      group: safety
+      search_strategies:
+        - drug_interaction
+        - supplement_interaction
+        - herb_drug_interaction
+    
+    bioavailability:
+      search_term: bioavailability absorption metabolism
+      weight: 1.2
+      description: 생체이용률과 흡수
+      group: pharmacology
+      search_strategies:
+        - bioavailability
+        - absorption
+        - metabolism
+    
+    safety:
+      search_term: safety adverse effects
+      weight: 1.4
+      description: 안전성과 부작용
+      group: safety
+      search_strategies:
+        - safety_assessment
+        - adverse_effects
+        - toxicity
+    
+    clinical:
+      search_term: clinical trials
+      weight: 1.3
+      description: 임상시험
+      group: research_type
+      search_strategies:
+        - clinical_trial
+        - randomized_controlled_trial
+        - clinical_study
+    
+    review:
+      search_term: systematic review
+      weight: 1.2
+      description: 체계적 문헌고찰
+      group: research_type
+      search_strategies:
+        - systematic_review
+        - literature_review
+    
+    meta:
+      search_term: meta analysis
+      weight: 1.3
+      description: 메타분석
+      group: research_type
+      search_strategies:
+        - meta_analysis
+        - pooled_analysis
+    
+    # 건강 관련
+    pathophysiology:
+      search_term: pathophysiology pathogenesis
+      weight: 1.2
+      description: 병태생리학
+      group: mechanism
+      search_strategies:
+        - pathophysiology
+        - pathogenesis
+        - disease_mechanism
+    
+    treatment:
+      search_term: treatment therapy
+      weight: 1.3
+      description: 치료
+      group: clinical
+      search_strategies:
+        - treatment
+        - therapy
+        - intervention
+    
+    prevention:
+      search_term: prevention prophylaxis
+      weight: 1.2
+      description: 예방
+      group: clinical
+      search_strategies:
+        - prevention
+        - prophylaxis
+        - preventive_measure
+    
+    effectiveness:
+      search_term: effectiveness efficacy
+      weight: 1.3
+      description: 효과
+      group: clinical
+      search_strategies:
+        - effectiveness
+        - efficacy
+        - therapeutic_effect
+    
+    # 영양 관련
+    nutrition:
+      search_term: nutrition dietary supplementation
+      weight: 1.2
+      description: 영양
+      group: nutrition
+      search_strategies:
+        - nutrition
+        - dietary_supplement
+        - nutritional_supplementation
+    
+    dosage:
+      search_term: dosage dose-response
+      weight: 1.2
+      description: 용량
+      group: pharmacology
+      search_strategies:
+        - dosage
+        - dose_response
+        - optimal_dose
+
+  # 카테고리별 가중치
+  category_weights:
+    # 영양제 관련
+    mechanism: 1.2
+    interaction: 1.3
+    bioavailability: 1.1
+    safety: 1.4
+    clinical: 1.3
+    
+    # 건강 키워드 관련
+    pathophysiology: 1.2
+    diagnosis: 1.1
+    treatment: 1.3
+    prevention: 1.2
+    nutrition: 1.1
+    
+    # 상호작용 관련
+    drug_interaction: 1.4
+    absorption: 1.2
+    synergy: 1.3
+    metabolism: 1.2
+    
+    # 복합 검색 관련
+    effectiveness: 1.3
+    dosage: 1.2
+    warning: 1.4
+
+  # 검색 전략
+  search_strategies:
+    interaction:
+      - basic:
+          query: "{supp1} {supp2} interaction"
+          category: interaction
+      - advanced:
+          query: "{supp1} {supp2} drug interaction systematic review"
+          category: interaction
+    
+    combined:
+      - basic:
+          query: "{supplement} {health_keyword}"
+          category: clinical
+      - clinical:
+          query: "{supplement} {health_keyword} clinical trial"
+          category: clinical
+
+# 3. 건강 지표
+health_metrics:
+  blood_pressure:
+    name: Blood Pressure
+    display_name: 혈압
+    category: cardiovascular
+    values:
+      수축기_혈압: Systolic blood pressure
+      이완기_혈압: Diastolic blood pressure
+    reference_ranges:
+      systolic: 120-139
+      diastolic: 80-89
+    lifestyle_factors:
+      - salt_intake
+      - stress
+      - exercise
+      - smoking
+      - alcohol
+    interaction_warnings:
+      고혈압약: Antihypertensive medications
+      베타차단제: Beta blockers
+      ACE억제제: ACE inhibitors
+
+  blood_sugar:
+    name: Blood Sugar
+    display_name: 혈당
+    category: metabolic_endocrine
+    values:
+      공복혈당: Fasting blood glucose
+      당화혈색소: HbA1c
+    reference_ranges:
+      fasting: 100-125
+      hba1c: 5.7-6.4
+    lifestyle_factors:
+      - diet
+      - exercise
+      - weight
+      - stress
+      - sleep
+    interaction_warnings:
+      당뇨약: Diabetes medications
+      인슐린: Insulin
+
+  body_composition:
+    name: Body Composition
+    display_name: 체성분
+    category: metabolic_endocrine
+    values:
+      신장: Height
+      체중: Weight
+      허리둘레: Waist circumference
+      체질량지수: BMI
+    reference_ranges:
+      bmi: 18.5-25.0
+      waist_m: 90
+      waist_f: 85
+    lifestyle_factors:
+      - diet
+      - exercise
+      - weight
+    interaction_warnings:
+      체중감량제: Weight loss medications
+      갑상선약: Thyroid medications
+
+  liver_function:
+    name: Liver Function
+    display_name: 간기능
+    category: digestive
+    values:
+      AST: AST
+      ALT: ALT
+      γ-GTP: γ-GTP
+    reference_ranges:
+      alt: 0-40
+      ast: 0-40
+      ggt: 11-63
+    lifestyle_factors:
+      - alcohol
+      - diet
+      - weight
+      - medication_use
+    interaction_warnings:
+      알코올: Alcohol
+      아세트아미노펜: Acetaminophen
+      소염진통제: NSAIDs
+
+  kidney_function:
+    name: Kidney Function
+    display_name: 신장기능
+    category: kidney
+    values:
+      크레아티닌: Creatinine
+      사구체여과율: GFR
+      BUN: BUN
+    reference_ranges:
+      creatinine_m: 0.7-1.2
+      creatinine_f: 0.5-0.9
+      gfr: '>60'
+      bun: 7-20
+    lifestyle_factors:
+      - water_intake
+      - salt_intake
+      - protein_intake
+    interaction_warnings:
+      소염진통제: NSAIDs
+      조영제: Contrast dyes
+
+  endoscopy:
+    name: Endoscopy Results
+    display_name: 내시경 결과
+    category: digestive
+    values:
+      위내시경: Gastroscopy
+      대장내시경: Colonoscopy
+    reference_ranges:
+      frequency_gastroscopy: 2
+      frequency_colonoscopy: 5
+    lifestyle_factors:
+      - diet
+      - smoking
+      - alcohol
+    interaction_warnings:
+      혈액희석제: Blood thinners
+      아스피린: Aspirin
+
+# 4. 생활습관 요소
+lifestyle:
+  factors:
+    식이: Diet
+    운동: Exercise
+    수면: Sleep
+    스트레스: Stress
+    음주: Alcohol
+    흡연: Smoking
+    체중: Weight
+  
+  conditions:
+    운동부족: Sedentary lifestyle
+    불규칙한_식사: Irregular eating
+    수면부족: Sleep deprivation
+    과도한_스트레스: Excessive stress
+    과다음주: Excessive drinking
+    흡연: Smoking
+    비만: Obesity
+
+# 5. 기관 정보
+organizations:
+  질병관리청: Korea Disease Control and Prevention Agency
+  대한당뇨병학회: Korean Diabetes Association
+  대한간학회: Korean Association for the Study of the Liver
+  대한비만학회: Korean Society for the Study of Obesity
+  대한신장학회: Korean Society of Nephrology 

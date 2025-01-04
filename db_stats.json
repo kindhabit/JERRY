@@ -1,0 +1,27 @@
+{
+  "supplements": {
+    "count": 0,
+    "metadata": {},
+    "last_updated": "2025-01-03T12:16:56.148980"
+  },
+  "health_data": {
+    "count": 0,
+    "metadata": {},
+    "last_updated": "2025-01-03T12:16:56.157332"
+  },
+  "interactions": {
+    "count": 0,
+    "metadata": {},
+    "last_updated": "2025-01-03T12:16:56.165733"
+  },
+  "health_metrics": {
+    "count": 0,
+    "metadata": {},
+    "last_updated": "2025-01-03T12:16:56.173783"
+  },
+  "medical_terms": {
+    "count": 0,
+    "metadata": {},
+    "last_updated": "2025-01-03T12:16:56.181322"
+  }
+}

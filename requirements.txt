@@ -1,0 +1,49 @@
+# 웹 프레임워크
+fastapi==0.104.1
+uvicorn==0.24.0
+
+# 데이터 처리
+numpy>=1.24.3,<2.0.0
+pandas==2.1.4
+
+# LangChain & 벡터 데이터베이스
+chromadb==0.5.23
+langchain==0.1.0
+langchain-core==0.1.23
+langchain-community==0.0.20
+langchain-openai==0.0.3
+openai==1.6.1
+
+# Pydantic
+pydantic>=2.7.0
+pydantic-settings>=2.7.0
+pydantic-core>=2.14.6
+
+# 환경 및 보안
+python-dotenv==1.0.0
+cryptography==41.0.7
+pycryptodome==3.19.0
+
+# HTTP 클라이언트
+aiohttp==3.9.3
+
+# XML 처리
+lxml==5.1.0
+
+# 시스템 모니터링
+psutil>=5.9.7
+
+# 테스트
+pytest==7.4.3
+pytest-asyncio==0.23.2
+
+# FastAPI 관련
+fastapi>=0.68.0
+uvicorn>=0.15.0
+pyyaml>=5.4.1
+
+# 로깅
+python-json-logger>=2.0.0
+
+# 타입 힌팅
+typing-extensions>=4.0.0

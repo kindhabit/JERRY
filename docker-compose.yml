@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  app:
+    build: .
+    container_name: jerry_app
+    ports:
+      - "3333:3333"
+    volumes:
+      - .:/app
+    environment:
+      - RAG_CONFIG_FILE=/app/config.yml
