@@ -33,19 +33,89 @@ JERRY 프로젝트의 임베딩 시스템은 영양제 관련 논문 데이터�
 ### 2.2 임베딩 프로세스 순서도
 ```mermaid
 graph TD
-    A[config.yaml 로드] --> B[영양제 목록 가져오기]
-    B --> C[PubMed API 검색]
-    C --> D{초록 존재?}
-    D -->|Yes| E[데이터 전처리]
-    D -->|No| F[스킵]
-    E --> G[LLM 분석]
-    G --> H[임베딩 생성]
-    H --> I{캐시 존재?}
-    I -->|Yes| J[캐시된 임베딩 사용]
-    I -->|No| K[OpenAI API 호출]
-    J --> L[ChromaDB 저장]
-    K --> L
+    A[config.yaml 로드] --> B[ChromaDB 초기화]
+    B --> C[5개 컬렉션 생성]
+    
+    C --> D[영양제 데이터 수집]
+    C --> E[건강 데이터 수집]
+    C --> F[상호작용 데이터 수집]
+    C --> G[의학 용어 데이터 수집]
+    
+    D --> D1[영양제 목록 로드]
+    D1 --> D2[각 영양제별 PubMed 검색]
+    D2 --> D3{카테고리별 검색}
+    D3 --> D31[효능/효과]
+    D3 --> D32[안전성]
+    D3 --> D33[상호작용]
+    D3 --> D34[임상연구]
+    D31 & D32 & D33 & D34 --> D4[LLM 분석]
+    D4 --> D5[임베딩 생성]
+    D5 --> D6[supplements 컬렉션 저장]
+    
+    E --> E1[건강 키워드 로드]
+    E1 --> E2[키워드별 PubMed 검색]
+    E2 --> E3[LLM 분석]
+    E3 --> E4[임베딩 생성]
+    E4 --> E5[health_data 컬렉션 저장]
+    
+    F --> F1[상호작용 쌍 로드]
+    F1 --> F2[상호작용별 PubMed 검색]
+    F2 --> F3[LLM 분석]
+    F3 --> F4[임베딩 생성]
+    F4 --> F5[interactions 컬렉션 저장]
+    
+    G --> G1[의학 용어 로드]
+    G1 --> G2[용어별 PubMed 검색]
+    G2 --> G3[LLM 분석]
+    G3 --> G4[임베딩 생성]
+    G4 --> G5[medical_terms 컬렉션 저장]
 ```
+
+### 2.3 데이터 수집 프로세스
+
+1. **초기화 단계**
+   ```python
+   ChromaManager.__init__()
+   ├── _initialize_chroma_client()
+   │   └── ConfigLoader.get_service_settings()
+   └── [ChromaDB 연결 설정]
+   ```
+
+2. **컬렉션 설정**
+   ```python
+   ChromaManager.reinitialize_database()
+   └── _initialize_collections()
+       ├── supplements: 영양제 기본 정보
+       ├── interactions: 영양제 간 상호작용
+       ├── health_data: 건강 관련 데이터
+       ├── health_metrics: 건강 지표
+       └── medical_terms: 의학 용어 사전
+   ```
+
+3. **데이터 수집 단계**
+   ```python
+   ChromaManager.initialize_data()
+   ├── [영양제 데이터 수집]
+   │   ├── ConfigLoader.get_supplements()
+   │   └── [각 영양제별 반복]
+   │       ├── PubMed 검색 (4개 카테고리)
+   │       ├── LLM 분석
+   │       └── ChromaDB 저장
+   │
+   ├── [건강 데이터 수집]
+   │   ├── ConfigLoader.get_health_keywords()
+   │   └── [각 키워드별 반복]
+   │
+   ├── [상호작용 데이터 수집]
+   │   ├── ConfigLoader.get_interaction_pairs()
+   │   └── [각 상호작용 쌍별 반복]
+   │
+   └── [의학 용어 데이터 수집]
+       ├── ConfigLoader.get_medical_terms()
+       └── [각 용어별 반복]
+   ```
+
+각 수집 프로세스는 독립적으로 실행되며, 한 프로세스의 실패가 다른 프로세스에 영향을 주지 않습니다. 각 데이터는 수집 즉시 개별적으로 저장되어, 중간에 프로세스가 중단되어도 이전 데이터는 안전하게 보관됩니다.
 
 ### 2.3 주요 컴포넌트
 
@@ -245,4 +315,72 @@ def get_cache_stats(self) -> dict:
 - 실시간 업데이트 지원
 - 증분 업데이트
 - 벡터 검색 최적화
+
+# 벡터 스토어 관리
+
+## 1. 초기화 (Initialize)
+...
+
+## 2. 업데이트 (Update)
+
+### 2.1 기본 업데이트
+벡터 스토어의 업데이트는 기존 데이터를 유지하면서 새로운 데이터만 추가하는 방식으로 동작합니다.
+
+```bash
+python vector_store_manager.py --action update --debug
+```
+
+### 2.2 컬렉션별 제한 업데이트
+각 컬렉션별로 처리할 데이터 수를 제한하여 업데이트할 수 있습니다. 이는 개발/테스트 시에 유용합니다.
+
+```bash
+python vector_store_manager.py --action update --debug \
+    --supplements-limit 10 \
+    --interactions-limit 5 \
+    --health-data-limit 5
+```
+
+#### 제한 옵션
+- `--supplements-limit`: 영양제 데이터 처리 제한 수
+- `--interactions-limit`: 상호작용 데이터 처리 제한 수
+- `--health-data-limit`: 건강 데이터 처리 제한 수
+
+#### 처리 로직
+1. 각 컬렉션별 제한이 0인 경우:
+   - 해당 컬렉션은 완전히 건너뜀
+   - 로그에 "건너뜀" 상태로 표시
+
+2. 각 컬렉션별 제한이 양수인 경우:
+   - 지정된 수만큼만 데이터 처리
+   - 제한에 도달하면 해당 컬렉션 처리 중단
+   - 로그에 처리된 데이터 수 표시 (예: "5/10")
+
+3. 제한이 설정되지 않은 경우:
+   - 모든 데이터 처리
+   - 기존 동작과 동일
+
+#### 처리 순서
+1. supplements 컬렉션 처리
+2. interactions 컬렉션 처리
+3. health_data 컬렉션 처리
+
+각 컬렉션은 독립적으로 처리되며, 한 컬렉션의 실패가 다른 컬렉션 처리에 영향을 주지 않습니다.
+
+### 2.3 업데이트 결과 확인
+업데이트 완료 후 다음과 같은 통계 정보가 표시됩니다:
+
+```
+=== 업데이트 결과 ===
+검사한 총 PMID 수: 100
+기존 PMID 수: 95
+새로 추가된 PMID 수: 4
+처리 실패 PMID 수: 1
+
+=== 컬렉션별 처리 현황 ===
+supplements 컬렉션: 10/10
+interactions 컬렉션: 5/5
+health_data 컬렉션: 3/5
+```
+
+## 3. 상태 확인 (Stats)
 ``` 

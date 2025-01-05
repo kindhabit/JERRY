@@ -3,195 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JERRY 시스템 문서 - 2025.01.02</title>
+    <title>벡터 스토어 문서</title>
     <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>JERRY 시스템 문서</h1>
-            <p class="metadata">최종 업데이트: 2025년 1월 2일</p>
-            <nav class="version-nav">
-                <a href="#current">현재 버전</a>
-                <a href="#history">버전 이력</a>
-                <a href="../README.md">README 보기</a>
-            </nav>
-        </header>
-
-        <section id="architecture" class="main-section">
-            <h2>시스템 아키텍처</h2>
-            
-            <div class="architecture-diagram">
-                <h3>핵심 컴포넌트 구조</h3>
-                <pre class="folder-structure">
-📁 core/
-├── 📁 vector_db/           # 벡터 DB 관련
-│   ├── vector_store_manager.py  # 벡터 DB 생성/관리
-│   └── embedding_creator.py     # 임베딩 생성
-│
-├── 📁 services/            # 핵심 서비스
-│   ├── rag_service.py          # RAG 기반 검색/생성
-│   ├── pattern_service.py      # 패턴 학습 및 강화
-│   └── health_service.py       # 통합된 건강 서비스
-│
-└── 📁 analysis/
-    └── client_health_analyzer.py # 클라이언트 건강데이터 분석</pre>
+        <nav class="sidebar">
+            <div class="sidebar-content">
+                <h2>목차</h2>
+                <ul>
+                    <li><a href="#벡터-스토어-관리">벡터 스토어 관리</a>
+                        <ul>
+                            <li><a href="#1-초기화-initialize">1. 초기화</a></li>
+                            <li><a href="#2-업데이트-update">2. 업데이트</a>
+                                <ul>
+                                    <li><a href="#21-기본-업데이트">2.1 기본 업데이트</a></li>
+                                    <li><a href="#22-컬렉션별-제한-업데이트">2.2 컬렉션별 제한 업데이트</a></li>
+                                    <li><a href="#23-업데이트-결과-확인">2.3 업데이트 결과 확인</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="#3-상태-확인-stats">3. 상태 확인</a></li>
+                        </ul>
+                    </li>
+                </ul>
             </div>
-
-            <div class="vector-db-structure">
-                <div class="collection-tabs">
-                    <button class="tab-btn active" data-tab="supplements">Supplements</button>
-                    <button class="tab-btn" data-tab="interactions">Interactions</button>
-                    <button class="tab-btn" data-tab="patterns">Patterns</button>
-                </div>
-
-                <div class="collection-content">
-                    <!-- Supplements Collection -->
-                    <div class="collection-panel active" id="supplements-panel">
-                        <h3>영양제 컬렉션</h3>
-                        <pre class="collection-code"><code>{
-    "supplements": {
-        "embeddings": "1536차원 벡터",
-        "metadata": {
-            "name": "영양제 이름",
-            "category": "분류",
-            "effects": ["효과1", "효과2"],
-            "evidence_level": "근거 수준"
-        }
-    }
-}</code></pre>
-                        <div class="collection-details">
-                            <h4>구조 설명</h4>
-                            <ul>
-                                <li>embeddings: OpenAI text-embedding-3-small 모델 사용</li>
-                                <li>metadata: 검색 및 필터링용 메타데이터</li>
-                            </ul>
-                            <a href="#search-process" class="process-link">검색 프로세스 보기</a>
-                        </div>
-                    </div>
-
-                    <!-- Interactions Collection -->
-                    <div class="collection-panel" id="interactions-panel">
-                        <h3>상호작용 컬렉션</h3>
-                        <pre class="collection-code"><code>{
-    "interactions": {
-        "embeddings": "1536차원 벡터",
-        "metadata": {
-            "supplements": ["영양제1", "영양제2"],
-            "effect_type": "상호작용 유형",
-            "severity": "심각도",
-            "mechanism": "작용 기전"
-        }
-    }
-}</code></pre>
-                        <div class="collection-details">
-                            <h4>구조 설명</h4>
-                            <ul>
-                                <li>supplements: 관련된 영양제 목록</li>
-                                <li>effect_type: 상호작용의 종류</li>
-                                <li>severity: 심각도 수준</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <!-- Patterns Collection -->
-                    <div class="collection-panel" id="patterns-panel">
-                        <h3>패턴 컬렉션</h3>
-                        <pre class="collection-code"><code>{
-    "health_patterns": {
-        "embeddings": "1536차원 벡터",
-        "metadata": {
-            "pattern_type": "패턴 유형",
-            "confidence": "신뢰도",
-            "frequency": "발생 빈도"
-        }
-    }
-}</code></pre>
-                        <div class="collection-details">
-                            <h4>구조 설명</h4>
-                            <ul>
-                                <li>pattern_type: 패턴의 종류</li>
-                                <li>confidence: 패턴의 신뢰도</li>
-                                <li>frequency: 발생 빈도 수</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="search-process" class="search-process">
-                    <h3>검색 프로세스</h3>
-                    <div class="mermaid">
-                        graph TD
-                            A[검색 요청] --> B[벡터 변환]
-                            B --> C[유사도 검색]
-                            C --> D[메타데이터 필터링]
-                            D --> E[결과 반환]
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="version-history" class="main-section">
-            <h2>버전 이력</h2>
-            <div class="timeline">
-                <div class="version-entry current">
-                    <h3>2025-01-02</h3>
-                    <ul>
-                        <li>벡터 DB 계층 구조 재설계
-                            <ul>
-                                <li>컬렉션 구조 최적화</li>
-                                <li>검색 프로세스 개선</li>
-                            </ul>
-                        </li>
-                        <li>서비스 통합
-                            <ul>
-                                <li>추천 + QA 서비스 통합</li>
-                                <li>패턴 서비스 재배치</li>
-                            </ul>
-                        </li>
-                        <li>유틸리티 통합</li>
-                    </ul>
-                </div>
-                <div class="version-entry">
-                    <h3>2024-12-31</h3>
-                    <ul>
-                        <li>기본 시스템 구축</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-        <script>
-            mermaid.initialize({startOnLoad:true});
-
-            document.addEventListener('DOMContentLoaded', function() {
-                // 탭 전환 기능
-                const tabBtns = document.querySelectorAll('.tab-btn');
-                tabBtns.forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        // 활성 탭 변경
-                        document.querySelector('.tab-btn.active').classList.remove('active');
-                        btn.classList.add('active');
-                        
-                        // 패널 전환
-                        const panelId = `${btn.dataset.tab}-panel`;
-                        document.querySelector('.collection-panel.active').classList.remove('active');
-                        document.getElementById(panelId).classList.add('active');
-                    });
-                });
-
-                // 스무스 스크롤
-                document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-                    anchor.addEventListener('click', function (e) {
-                        e.preventDefault();
-                        document.querySelector(this.getAttribute('href')).scrollIntoView({
-                            behavior: 'smooth'
-                        });
-                    });
-                });
-            });
-        </script>
+        </nav>
+        <main class="content">
+            <div id="markdown-content"></div>
+        </main>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        fetch('embedding.md')
+            .then(response => response.text())
+            .then(text => {
+                document.getElementById('markdown-content').innerHTML = marked.parse(text);
+            });
+    </script>
 </body>
 </html>

@@ -1,0 +1,64 @@
+{
+   "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "1. Service: Run API Server",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/1_SRC/main/app.py",
+            "args": [],
+            "jinja": true,
+            "justMyCode": true,
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/1_SRC"
+            }
+        },
+        {
+            "name": "2. DB: Initialize Vector Store",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/1_SRC/core/vector_db/vector_store_manager.py",
+            "args": ["--action", "reinit", "--force", "--debug"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/1_SRC"
+            }
+        },
+        {
+            "name": "3. DB: Update Vector Store",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/1_SRC/core/vector_db/vector_store_manager.py",
+            "args": [
+                "--action", "update",
+                "--debug",
+                "--supplements-limit", "0",
+                "--interactions-limit", "20",
+                "--health-data-limit", "20"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/1_SRC"
+            }
+        },
+        {
+            "name": "4. DB: View Vector Store Status",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/1_SRC/core/vector_db/vector_store_manager.py",
+            "args": ["--action", "stats", "--debug"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/1_SRC"
+            }
+        },
+
+    ]
+}
