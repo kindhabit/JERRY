@@ -14,7 +14,10 @@ logger = setup_logger('health_service')
 class HealthService:
     def __init__(self, chroma_manager: ChromaManager):
         self.chroma_manager = chroma_manager
-        self.rag_service = RAGService(chroma_manager)
+        self.rag_service = RAGService(
+            chroma_manager=chroma_manager,
+            openai_client=chroma_manager.openai_client
+        )
         self.health_analyzer = HealthDataAnalyzer()
         
     async def analyze_health_metrics(self, health_data: HealthData) -> Dict:
@@ -125,7 +128,7 @@ class HealthService:
     async def _analyze_interactions(
         self,
         recommendations: List[Dict],
-        health_data: Dict,
+        health_data: Optional[Dict],
         user_profile: Optional[Dict]
     ) -> Dict:
         """간섭도 분석"""
@@ -138,21 +141,29 @@ class HealthService:
         # 1. 영양제 간 상호작용
         for i, supp1 in enumerate(recommendations):
             for supp2 in recommendations[i+1:]:
+                # 영양제 정보 구성
+                supplements_info = {
+                    supp1['name']: supp1.get('related', []),
+                    supp2['name']: supp2.get('related', [])
+                }
+                
+                # 상호작용 분석 요청
                 interaction = await self.chroma_manager.get_supplement_interaction(
-                    supp1['name'],
-                    supp2['name']
+                    health_data=health_data if health_data else {},
+                    current_supplements=[supp1['name'], supp2['name']]
                 )
                 if interaction:
                     interactions["supplement_interactions"].append(interaction)
         
-        # 2. 건강 상태에 미치는 영향
-        for supp in recommendations:
-            impacts = await self.chroma_manager.get_health_impacts(
-                supplement=supp['name'],
-                health_data=health_data
-            )
-            if impacts:
-                interactions["health_condition_impacts"].extend(impacts)
+        # 2. 건강 상태에 미치는 영향 (health_data가 있는 경우에만)
+        if health_data:
+            for supp in recommendations:
+                impacts = await self.chroma_manager.get_health_impacts(
+                    supplement=supp['name'],
+                    health_data=health_data
+                )
+                if impacts:
+                    interactions["health_condition_impacts"].extend(impacts)
         
         # 3. 약물 상호작용 (사용자 프로필이 있는 경우)
         if user_profile and 'medications' in user_profile:
@@ -166,3 +177,35 @@ class HealthService:
                         interactions["medication_interactions"].append(interaction)
         
         return interactions 
+
+    async def analyze_interactions(self, recommendations: Dict[str, List[str]]) -> Dict:
+        """영양제 간 상호작용 분석"""
+        try:
+            # 입력 형식 변환
+            formatted_recommendations = [
+                {"name": supp_name, "related": related}
+                for supp_name, related in recommendations.items()
+            ]
+            
+            # 기존 _analyze_interactions 메서드 사용
+            analysis_result = await self._analyze_interactions(
+                recommendations=formatted_recommendations,
+                health_data=None,  # 건강 데이터가 없는 경우 None으로 전달
+                user_profile=None
+            )
+            
+            # 결과 포맷팅
+            return {
+                "has_interactions": bool(analysis_result["supplement_interactions"]),
+                "interactions": analysis_result["supplement_interactions"],
+                "questions": [
+                    "해당 영양제들을 함께 복용하신 적이 있나요?",
+                    "복용 시 불편함을 느끼신 적이 있나요?",
+                    "현재 다른 약물을 복용 중이신가요?"
+                ],
+                "evidence": [interaction.get("evidence", []) for interaction in analysis_result["supplement_interactions"]]
+            }
+            
+        except Exception as e:
+            logger.error(f"영양제 상호작용 분석 중 오류: {str(e)}")
+            raise 

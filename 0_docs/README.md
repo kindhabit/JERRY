@@ -1,4 +1,4 @@
-# JERRY 시스템 문서 (2025-01-02)
+# JERRY 시스템 문서 (2025-01-05)
 
 ## 프로젝트 개요
 JERRY는 건강검진 데이터 기반의 지능형 영양제 추천 시스템입니다. 벡터 데이터베이스와 RAG(Retrieval-Augmented Generation) 기술을 활용하여 개인화된 영양제 추천과 건강 상담을 제공합니다.
@@ -17,18 +17,25 @@ JERRY는 건강검진 데이터 기반의 지능형 영양제 추천 시스템�
 │   │
 │   ├── 📁 services/            # 핵심 서비스
 │   │   ├── rag_service.py          # RAG 기반 검색/생성
-│   │   ├── pattern_service.py      # 패턴 학습 및 강화
-│   │   └── health_service.py       # 통합된 건강 서비스
+│   │   ├── health_service.py       # 건강 서비스
+│   │   └── interaction_service.py   # 상호작용 분석
 │   │
-│   └── 📁 analysis/
-│       └── client_health_analyzer.py # 클라이언트 건강데이터 분석
+│   └── 📁 analysis/            # 분석 모듈
+│       └── health_analyzer.py   # 건강 데이터 분석
+│
+├── 📁 api/                      # API 엔드포인트
+│   └── routes/
+│       ├── health.py           # 건강 관련 API
+│       ├── supplements.py      # 영양제 관련 API
+│       └── interactions.py     # 상호작용 API
 │
 ├── 📁 models/                   # 데이터 모델
 │   ├── health_data.py          # 건강 데이터 모델
 │   └── supplement.py           # 영양제 관련 모델
 │
 ├── 📁 utils/                    # 유틸리티
-│   └── system_utils.py         # 통합된 유틸리티
+│   ├── openai_client.py        # OpenAI API 클라이언트
+│   └── logger_config.py        # 로깅 설정
 │
 └── 📁 external/                 # 외부 연동
     └── pubmed_client.py        # PubMed API 클라이언트
@@ -64,15 +71,14 @@ collections = {
         }
     },
     
-    "health_patterns": {
-        # 건강 패턴 컬렉션
+    "health_data": {
+        # 건강 데이터 컬렉션
         "embeddings": List[float],
         "metadata": {
-            "pattern_type": str,      # 패턴 유형
-            "conditions": List[str],  # 관련 건강상태
-            "frequency": int,         # 발생 빈도
-            "confidence": float,      # 신뢰도
-            "last_updated": str       # 최종 업데이트
+            "category": str,         # 건강 카테고리
+            "metrics": List[str],    # 관련 지표
+            "normal_range": str,     # 정상 범위
+            "risk_factors": List[str] # 위험 요인
         }
     }
 }
@@ -100,41 +106,33 @@ graph TD
     end
 ```
 
-## 주요 기능
+## API 엔드포인트
 
-### 1. 벡터 DB 시스템
-- 임베딩 생성 및 저장
-- 벡터 검색
-- 데이터베이스 관리
+### 건강 분석 API
+- `POST /api/health/analyze`: 건강 데이터 분석
+- `GET /api/health/categories`: 건강 카테고리 조회
+- `GET /api/health/metrics`: 건강 지표 조회
 
-### 2. RAG 서비스
-- 컨텍스트 기반 검색
-- 관련 문서 검색
-- 응답 생성
+### 영양제 API
+- `GET /api/supplements`: 영양제 목록 조회
+- `GET /api/supplements/{id}`: 영양제 상세 정보
+- `POST /api/supplements/recommend`: 영양제 추천
 
-### 3. 패턴 서비스
-- 상호작용 패턴 학습
-- 패턴 기반 강화
-- 신뢰도 평가
-
-### 4. 건강 서비스
-- 영양제 추천
-- 건강 상담
-- 상호작용 분석
+### 상호작용 API
+- `POST /api/interactions/analyze`: 상호작용 분석
+- `GET /api/interactions/{id}`: 상호작용 상세 정보
 
 ## 업데이트 내역
 
 ### 2025년
+- 2025-01-05
+  - API 엔드포인트 구조화
+  - 상호작용 분석 기능 개선
+  - 문서 시스템 통합
 - 2025-01-02
   - 시스템 구조 최적화
-    - 벡터 DB 계층 구조 재설계
-    - 컬렉션 구조 최적화
-    - 검색 프로세스 개선
   - 서비스 통합
-    - 추천 + QA 서비스 통합
-    - 패턴 서비스 이동
   - 유틸리티 통합
-    - common, security, logger 통합
 
 ### 2024년
 - 2024-12-31: 기본 시스템 구축

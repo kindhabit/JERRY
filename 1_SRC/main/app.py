@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from core.vector_db.vector_store_manager import ChromaManager
-from config.config_loader import CONFIG
+from config.config_loader import CONFIG, ConfigLoader
 import os
 import resource
 import gc
@@ -15,6 +15,7 @@ from core.analysis.client_health_analyzer import HealthDataAnalyzer
 from fastapi.responses import JSONResponse
 import uvicorn
 import yaml
+from contextlib import asynccontextmanager
 
 # 메모리 제한 설정
 def limit_memory(max_mem_mb=1024):  # 1GB
@@ -29,17 +30,32 @@ chroma_client = ChromaManager()
 
 # FastAPI 서버 설정
 def load_config():
-    with open('config/config.yaml', 'r') as file:
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'config.yaml')
+    with open(config_path, 'r') as file:
         return yaml.safe_load(file)
 
 config = load_config()
 fastapi_config = config["fastapi"]
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """앱 시작/종료 시 실행되는 이벤트 핸들러"""
+    # 시작 시
+    yield
+    # 종료 시
+    logger.info("Shutting down application...")
+    if 'chroma_client' in globals():
+        try:
+            await chroma_client.close()
+            logger.info("ChromaDB connection closed")
+        except Exception as e:
+            logger.error(f"Error closing ChromaDB connection: {e}")
+
 # FastAPI 애플리케이션 초기화
-kindhabit_app = FastAPI()
+kindhabit_app = FastAPI(lifespan=lifespan)
 
 # 로그 설정
-log_dir = os.path.abspath("./logs")
+log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
 os.makedirs(log_dir, exist_ok=True)
 log_file = os.path.join(log_dir, "server.log")
 
@@ -68,17 +84,6 @@ async def log_requests(request: Request, call_next):
     logger.info(f"Response status: {response.status_code} for {client_ip}")
     return response
 
-@kindhabit_app.on_event("shutdown")
-async def shutdown_event():
-    """앱 종료 시 정리 작업"""
-    logger.info("Shutting down application...")
-    if 'chroma_client' in globals():
-        try:
-            await chroma_client.close()
-            logger.info("ChromaDB connection closed")
-        except Exception as e:
-            logger.error(f"Error closing ChromaDB connection: {e}")
-
 @kindhabit_app.get("/")
 def read_root():
     """루트 엔드포인트."""
@@ -87,14 +92,64 @@ def read_root():
 
 @kindhabit_app.post("/api/analyze-request/")
 async def analyze_request(request: Request):
-    config_manager = ConfigManager()
-    # 설정 기반 처리
-    pass
+    """건강 데이터 분석 요청 처리"""
+    try:
+        config_loader = ConfigLoader()
+        data = await request.json()
+        
+        # 요청 데이터 검증
+        if not data:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": "요청 데이터가 없습니다."
+                }
+            )
+            
+        # 분석 ID 생성
+        analysis_id = str(uuid.uuid4())
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "분석 요청이 성공적으로 처리되었습니다.",
+                "analysis_id": analysis_id,
+                "data": data
+            }
+        )
+    except Exception as e:
+        logger.error(f"분석 요청 처리 중 오류 발생: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "분석 요청 처리 중 오류가 발생했습니다.",
+                "detail": str(e)
+            }
+        )
 
 @kindhabit_app.get("/api/health-categories/")
 async def get_health_categories():
-    config_manager = ConfigManager()
-    return config_manager.get_all_health_categories()
+    """건강 카테고리 조회"""
+    try:
+        config_loader = ConfigLoader()
+        categories = config_loader.get_health_keywords()
+        return JSONResponse(
+            status_code=200,
+            content={"categories": categories}
+        )
+    except Exception as e:
+        logger.error(f"건강 카테고리 조회 중 오류 발생: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "건강 카테고리 조회 중 오류가 발생했습니다.",
+                "detail": str(e)
+            }
+        )
 
 @kindhabit_app.exception_handler(404)
 async def not_found_handler(request: Request, exc: HTTPException):
@@ -121,22 +176,33 @@ async def analyze_interactions(
 ):
     """추천 보충제들의 상호작용 분석"""
     try:
-        recommender = HealthService()
+        recommender = HealthService(chroma_manager=chroma_client)
         interaction_analysis = await recommender.analyze_interactions(recommendations)
         
+        # 기본 응답 구조
+        response = {
+            "status": "success",
+            "analysis_id": analysis_id,
+            "recommendations": {
+                supplement: {
+                    "name": supplement,
+                    "related_supplements": related
+                }
+                for supplement, related in recommendations.items()
+            },
+            "has_interactions": interaction_analysis["has_interactions"]
+        }
+        
+        # 상호작용이 있는 경우 추가 정보
         if interaction_analysis["has_interactions"]:
-            return {
-                "status": "success",
-                "analysis_id": analysis_id,
-                "has_interactions": True,
+            response.update({
                 "interaction_details": interaction_analysis["interactions"],
                 "questions": interaction_analysis["questions"],
                 "evidence": interaction_analysis["evidence"]
-            }
-        return {
-            "status": "success",
-            "has_interactions": False
-        }
+            })
+        
+        return response
+        
     except Exception as e:
         logger.error(f"상호작용 분석 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -329,7 +395,7 @@ class MemoryMonitor:
 if __name__ == "__main__":
     config = load_config()
     uvicorn.run(
-        "main:kindhabit_app",
+        app=kindhabit_app,
         host=config['fastapi']['server_host'],
         port=config['fastapi']['server_port'],
         log_level=config['fastapi']['log_level']

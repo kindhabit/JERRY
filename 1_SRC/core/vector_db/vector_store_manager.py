@@ -1,7 +1,7 @@
 import argparse
 import asyncio
 import logging
-from typing import List, Dict, Set, Optional
+from typing import List, Dict, Set, Optional, Any
 from utils.logger_config import setup_logger
 from config.config_loader import CONFIG
 from core.vector_db.embedding_creator import EmbeddingCreator
@@ -13,6 +13,7 @@ import os
 import chromadb
 import json
 from config.config_loader import ConfigLoader
+import uuid
 
 logger = setup_logger('vector_store')
 
@@ -81,6 +82,11 @@ class ChromaManager:
             self.client = self._initialize_chroma_client()
             self.embedding_creator = EmbeddingCreator()
             self.openai_client = OpenAIClient()
+            # 기존 컬렉션 로드
+            self.collections = {
+                coll.name: coll 
+                for coll in self.client.list_collections()
+            }
             logger.info("ChromaManager 기본 초기화 완료")
             logger.debug(f"임베딩 생성기 초기화 상태: {self.embedding_creator.get_cache_stats()}")
         except chromadb.errors.ChromaError as e:
@@ -166,7 +172,22 @@ class ChromaManager:
             if not force:
                 raise ValueError("force 옵션이 필요합니다")
             
-            logger.info("=== 데이터베이스 재초기화 시작 ===")
+            logger.info("\n=== 데이터베이스 재초기화 시작 ===")
+            logger.warning("⚠️  주의: 이 작업은 모든 기존 데이터를 삭제합니다!")
+            
+            # 사용자 확인
+            confirmation = input("\n정말로 모든 데이터를 삭제하시겠습니까? (yes/no): ")
+            if confirmation.lower() != 'yes':
+                logger.info("작업이 취소되었습니다.")
+                return False
+            
+            # 비밀번호 확인
+            password = input("\n관리자 비밀번호를 입력하세요: ")
+            if password != "ckrgkstmqrhks!23":
+                logger.error("비밀번호가 올바르지 않습니다.")
+                return False
+            
+            logger.info("\n인증 성공. 재초기화를 시작합니다...")
             
             # 1. 기존 컬렉션 상태 확인 및 초기화
             self.collections = await self._initialize_collections()
@@ -572,11 +593,168 @@ class ChromaManager:
                 }
                 await manager.update_database(collection_limits=limits)
             elif args.action == "stats":
-                await manager.show_stats()
+                stats = await manager.show_stats()
+                logger.info(f"\n=== Vector Store 상태 ===\n{json.dumps(stats, indent=2, ensure_ascii=False)}")
 
         except Exception as e:
             logger.error(f"작업 실패: {str(e)}")
             raise
+
+    async def get_supplement_interaction(self, health_data: Dict[str, Any], current_supplements: List[str]) -> Dict[str, Any]:
+        # 최소 필요 문서 수와 관련성 임계값 설정
+        MIN_REQUIRED_DOCS = 3
+        MINIMUM_RELEVANCE_THRESHOLD = 0.7
+
+        try:
+            if not isinstance(health_data, dict):
+                raise ValueError("health_data must be a dictionary")
+
+            # 건강 데이터에서 필요한 정보 추출
+            symptoms = health_data.get('symptoms', [])
+            health_metrics = health_data.get('health_metrics', {})
+            lifestyle_factors = health_data.get('lifestyle_factors', {})
+
+            logger.info(f"영양제 상호작용 분석 시작: {current_supplements}")
+            logger.debug(f"건강 데이터: {json.dumps(health_data, ensure_ascii=False)}")
+
+            # 검색 쿼리 구성
+            query = f"""
+            증상: {', '.join(symptoms)}
+            현재 복용 중인 영양제: {', '.join(current_supplements)}
+            건강 지표: {json.dumps(health_metrics, ensure_ascii=False)}
+            생활습관: {json.dumps(lifestyle_factors, ensure_ascii=False)}
+            위 정보와 관련된 영양제 상호작용 및 추천 연구
+            """
+
+            logger.info("ChromaDB 검색 수행 중...")
+            # interactions 컬렉션에서 검색 수행
+            collection = self.client.get_collection("interactions")
+            results = collection.query(
+                query_texts=[query],
+                n_results=5
+            )
+
+            # 검색 결과 검증
+            if not results['documents'] or len(results['documents'][0]) < MIN_REQUIRED_DOCS:
+                logger.warning(f"불충분한 데이터: {len(results['documents'][0]) if results['documents'] else 0}/{MIN_REQUIRED_DOCS}")
+                return {
+                    "status": "insufficient_data",
+                    "message": "죄송합니다. 현재 해당 건강 정보와 영양제 조합에 대한 충분한 연구 데이터가 없습니다.",
+                    "available_data": {
+                        "found_documents": len(results['documents'][0]) if results['documents'] else 0,
+                        "required_minimum": MIN_REQUIRED_DOCS,
+                        "suggestion": "더 많은 데이터가 수집된 후에 다시 시도해주세요."
+                    }
+                }
+
+            # 검색 결과의 관련성 검증
+            if results['distances'] and max(results['distances'][0]) < MINIMUM_RELEVANCE_THRESHOLD:
+                logger.warning(f"낮은 관련성: {max(results['distances'][0])}/{MINIMUM_RELEVANCE_THRESHOLD}")
+                return {
+                    "status": "low_relevance",
+                    "message": "입력하신 건강 정보와 직접적으로 관련된 연구 결과를 찾지 못했습니다.",
+                    "suggestion": "좀 더 일반적인 건강 지표나 증상으로 다시 검색해보시겠습니까?"
+                }
+
+            # LLM 프롬프트 구성
+            context = "\n".join(results['documents'][0])
+            logger.info("LLM 분석 시작...")
+            
+            # 응답 형식 템플릿
+            response_format = {
+                "recommendations": {
+                    "영양제_이름": {
+                        "confidence": "high/medium/low",
+                        "reason": "추천 이유",
+                        "evidence": "연구 근거",
+                        "interactions": "상호작용 정보",
+                        "precautions": "주의사항"
+                    }
+                },
+                "data_quality": {
+                    "confidence_level": "high/medium/low",
+                    "limitations": ["고려해야 할 제한사항들"]
+                }
+            }
+
+            # 프롬프트 구성
+            prompt = (
+                "다음 사용자의 건강 정보와 검색된 연구 결과를 바탕으로 영양제 추천 분석을 수행해주세요:\n\n"
+                f"사용자 건강 정보:\n"
+                f"- 증상: {symptoms}\n"
+                f"- 현재 복용 중: {current_supplements}\n"
+                f"- 건강 지표: {health_metrics}\n"
+                f"- 생활습관: {lifestyle_factors}\n\n"
+                f"검색된 연구 결과:\n{context}\n\n"
+                "다음 사항들을 고려하여 응답해주세요:\n"
+                "1. 확실한 근거가 있는 내용만 포함할 것\n"
+                "2. 데이터가 불충분한 경우 명확히 표시할 것\n"
+                "3. 추측이나 일반화된 조언은 피할 것\n"
+                "4. 각 추천에 대한 신뢰도 수준을 명시할 것\n\n"
+                f"응답 형식:\n{json.dumps(response_format, indent=2, ensure_ascii=False)}"
+            )
+
+            # LLM을 통한 분석 수행
+            response = await self.openai_client.chat.completions.create(
+                model="gpt-4-1106-preview",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1
+            )
+            
+            logger.info("LLM 분석 완료")
+            analysis_result = json.loads(response.choices[0].message.content)
+            
+            return {
+                "status": "success",
+                "analysis_id": str(uuid.uuid4()),
+                **analysis_result
+            }
+            
+        except ValueError as ve:
+            logger.error(f"잘못된 입력 데이터: {str(ve)}")
+            return {
+                "status": "error",
+                "message": f"잘못된 입력 데이터: {str(ve)}"
+            }
+        except Exception as e:
+            logger.error(f"영양제 상호작용 분석 중 오류 발생: {str(e)}")
+            return {
+                "status": "error",
+                "message": "분석 중 오류가 발생했습니다.",
+                "error_details": str(e)
+            }
+
+    async def get_health_impacts(self, supplement: str, health_data: Dict) -> List[Dict]:
+        """영양제가 건강 상태에 미치는 영향 조회"""
+        try:
+            # health_data 컬렉션에서 검색
+            collection = self.client.get_collection("health_data")
+            query = f"{supplement} health effects"
+            
+            results = collection.query(
+                query_texts=[query],
+                n_results=3
+            )
+            
+            impacts = []
+            for i, doc in enumerate(results['documents']):
+                if doc:
+                    impacts.append({
+                        "supplement": supplement,
+                        "health_aspect": results['metadatas'][i].get('category', 'general'),
+                        "impact": doc,
+                        "evidence": {
+                            "source": "PubMed",
+                            "pmid": results['ids'][i],
+                            "summary": doc
+                        }
+                    })
+            
+            return impacts
+            
+        except Exception as e:
+            logger.error(f"건강 영향 검색 실패 ({supplement}): {str(e)}")
+            return []
 
 if __name__ == "__main__":
     asyncio.run(ChromaManager.main()) 

@@ -19,7 +19,14 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/1_SRC/core/vector_db/vector_store_manager.py",
-            "args": ["--action", "reinit", "--force", "--debug"],
+            "args": [
+                "--action", "reinit",
+                "--force",
+                "--debug",
+                "--supplements-limit", "20",
+                "--interactions-limit", "20",
+                "--health-data-limit", "20"
+            ],
             "console": "integratedTerminal",
             "justMyCode": true,
             "envFile": "${workspaceFolder}/.env",
@@ -35,9 +42,9 @@
             "args": [
                 "--action", "update",
                 "--debug",
-                "--supplements-limit", "0",
-                "--interactions-limit", "20",
-                "--health-data-limit", "20"
+                "--supplements-limit", "10",
+                "--interactions-limit", "10",
+                "--health-data-limit", "10"
             ],
             "console": "integratedTerminal",
             "justMyCode": true,

@@ -3,29 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>벡터 스토어 문서</title>
+    <title>JERRY 프로젝트 문서</title>
     <link rel="stylesheet" href="assets/css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script>hljs.highlightAll();</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        hljs.highlightAll();
+        mermaid.initialize({ startOnLoad: true });
+    </script>
 </head>
 <body>
     <div class="container">
         <nav class="sidebar">
             <div class="sidebar-content">
-                <h2>목차</h2>
+                <h2>JERRY 문서</h2>
                 <ul>
-                    <li><a href="#벡터-스토어-관리">벡터 스토어 관리</a>
+                    <li><a href="#overview">시스템 개요</a></li>
+                    <li><a href="#embedding">임베딩 시스템</a>
                         <ul>
-                            <li><a href="#1-초기화-initialize">1. 초기화</a></li>
-                            <li><a href="#2-업데이트-update">2. 업데이트</a>
-                                <ul>
-                                    <li><a href="#21-기본-업데이트">2.1 기본 업데이트</a></li>
-                                    <li><a href="#22-컬렉션별-제한-업데이트">2.2 컬렉션별 제한 업데이트</a></li>
-                                    <li><a href="#23-업데이트-결과-확인">2.3 업데이트 결과 확인</a></li>
-                                </ul>
-                            </li>
-                            <li><a href="#3-상태-확인-stats">3. 상태 확인</a></li>
+                            <li><a href="#embedding-overview">개요</a></li>
+                            <li><a href="#embedding-structure">시스템 구조</a></li>
+                            <li><a href="#embedding-process">임베딩 프로세스</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="#rag">RAG 미들웨어</a>
+                        <ul>
+                            <li><a href="#rag-overview">개요</a></li>
+                            <li><a href="#rag-structure">시스템 구조</a></li>
+                            <li><a href="#rag-components">주요 컴포넌트</a></li>
+                            <li><a href="#rag-api">API 엔드포인트</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="#api">API 문서</a>
+                        <ul>
+                            <li><a href="#api-health">건강 분석 API</a></li>
+                            <li><a href="#api-supplements">영양제 API</a></li>
+                            <li><a href="#api-interactions">상호작용 API</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -37,11 +52,24 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-        fetch('embedding.md')
-            .then(response => response.text())
-            .then(text => {
-                document.getElementById('markdown-content').innerHTML = marked.parse(text);
+        // Markdown 파일들을 순차적으로 로드
+        const markdownFiles = ['README.md', 'embedding.md', 'rag_middleware.md'];
+        
+        Promise.all(markdownFiles.map(file =>
+            fetch(file)
+                .then(response => response.text())
+        )).then(contents => {
+            const combinedContent = contents.join('\n\n---\n\n');
+            document.getElementById('markdown-content').innerHTML = marked.parse(combinedContent);
+            
+            // 코드 하이라이팅 적용
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
             });
+            
+            // Mermaid 다이어그램 렌더링
+            mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+        });
     </script>
 </body>
 </html>
