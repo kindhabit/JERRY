@@ -76,7 +76,7 @@ class RAGService:
 
     async def _perform_analysis(self, health_data, current_supplements):
         # 벡터 스토어에서 관련 정보 검색
-        search_result = self.chroma_manager.get_supplement_interaction(
+        search_result = await self.chroma_manager.get_supplement_interaction(
             health_data, 
             current_supplements
         )
@@ -128,13 +128,60 @@ class RAGService:
         """
 
         try:
-            response = self.openai_client.chat.completions.create(
-                model="gpt-4-1106-preview",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1
+            response = await self.openai_client.chat_completion(
+                messages=[{"role": "user", "content": prompt}]
             )
             
-            return json.loads(response.choices[0].message.content)
+            return json.loads(response['content'])
             
         except Exception as e:
-            raise Exception(f"상세 분석 생성 중 오류: {str(e)}") 
+            raise Exception(f"상세 분석 생성 중 오류: {str(e)}")
+
+    async def analyze_with_patterns(self, query: str, context: Dict) -> Dict:
+        """패턴 기반 상세 분석 수행"""
+        try:
+            prompt = f"""
+            다음 쿼리와 컨텍스트를 바탕으로 상세 분석을 수행해주세요:
+
+            쿼리:
+            {query}
+
+            컨텍스트:
+            {json.dumps(context, indent=2, ensure_ascii=False)}
+
+            다음을 포함하여 분석해주세요:
+            1. 영양제 간 상호작용 패턴
+            2. 건강 상태와의 연관성
+            3. 복용 시 주의사항
+            4. 근거 기반 설명
+
+            응답은 다음 형식으로 작성해주세요:
+            {
+                "interactions": [
+                    {
+                        "supplements": ["영양제1", "영양제2"],
+                        "pattern": "상호작용 패턴 설명",
+                        "severity": "high/medium/low",
+                        "evidence": ["근거1", "근거2"]
+                    }
+                ],
+                "health_impacts": [
+                    {
+                        "condition": "건강상태",
+                        "impact": "영향 설명",
+                        "recommendations": ["권장사항1", "권장사항2"]
+                    }
+                ],
+                "precautions": ["주의사항1", "주의사항2"],
+                "references": ["참고문헌1", "참고문헌2"]
+            }
+            """
+
+            response = await self.openai_client.chat_completion(
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            return json.loads(response['content'])
+            
+        except Exception as e:
+            raise Exception(f"패턴 기반 분석 중 오류: {str(e)}") 

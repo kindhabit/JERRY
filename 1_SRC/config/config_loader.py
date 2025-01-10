@@ -47,7 +47,7 @@ class ConfigLoader:
                 'temperature': self._config.get('service', {}).get('openai', {}).get('chat', {}).get('temperature', 0.1)
             },
             'embedding': {
-                'model': self._config.get('analysis', {}).get('openai', {}).get('models', {}).get('embedding', {}).get('default', 'text-embedding-3-small')
+                'model': self._health_mapping.get('openai', {}).get('embedding_model', 'text-embedding-ada-002')
             }
         }
         
@@ -155,7 +155,7 @@ class ConfigLoader:
 
     def get_pubmed_search_strategies(self):
         """PubMed 검색 전략을 반환합니다."""
-        return self._config.get('data_sources', {}).get('pubmed', {}).get('search_strategies', {})
+        return self._health_mapping.get('search_strategies', {})
 
     def get_reference_ranges(self):
         """참조 범위를 반환합니다."""

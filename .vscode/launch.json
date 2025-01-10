@@ -1,5 +1,5 @@
 {
-   "version": "0.2.0",
+    "version": "0.2.0",
     "configurations": [
         {
             "name": "1. Service: Run API Server",
@@ -42,9 +42,11 @@
             "args": [
                 "--action", "update",
                 "--debug",
-                "--supplements-limit", "10",
-                "--interactions-limit", "10",
-                "--health-data-limit", "10"
+                "--supplements-limit", "0",
+                "--interactions-limit", "5",
+                "--health-data-limit", "5",
+                "--health-metrics-limit", "0",
+                "--medical-terms-limit", "0"
             ],
             "console": "integratedTerminal",
             "justMyCode": true,
@@ -65,7 +67,6 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/1_SRC"
             }
-        },
-
+        }
     ]
 }

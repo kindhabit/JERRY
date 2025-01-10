@@ -2,12 +2,14 @@ from typing import Dict, Optional, List
 from pydantic import BaseModel
 import logging
 from datetime import datetime
+from config.config_loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
 class HealthDataAnalyzer:
     def __init__(self):
         self.logger = logger
+        self.config_loader = ConfigLoader()
 
     async def analyze_health_data(self, data: Dict) -> Dict:
         """건강 데이터 종합 분석"""
@@ -44,19 +46,18 @@ class HealthDataAnalyzer:
     def analyze_risk_factors(self, health_data: 'HealthData') -> List[Dict]:
         """건강 위험 요인 분석"""
         risk_factors = []
-        health_keywords = CONFIG.get_health_keywords()
+        health_keywords = self.config_loader.get_health_keywords()
         
         # 키워드별 임계값 매핑 생성
         thresholds = {}
-        for keyword in health_keywords:
-            for condition in keyword.get('conditions', []):
-                if 'thresholds' in condition:
-                    thresholds[condition['name']] = {
-                        'values': condition['thresholds'],
-                        'category': keyword['category'],
-                        'description': condition.get('description', ''),
-                        'lifestyle_factors': keyword.get('lifestyle_factors', [])
-                    }
+        for category_id, category_info in health_keywords.items():
+            if 'medical_terms' in category_info:
+                thresholds[category_id] = {
+                    'values': category_info.get('reference_ranges', {}),
+                    'category': category_info.get('name', ''),
+                    'description': category_info.get('description', ''),
+                    'lifestyle_factors': category_info.get('search_terms', [])
+                }
         
         # BMI 분석
         if health_data.bmi:

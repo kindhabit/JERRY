@@ -2,6 +2,7 @@ import numpy as np
 from typing import List, Dict, Any
 from utils.openai_client import OpenAIClient
 from utils.logger_config import setup_logger
+import asyncio
 
 logger = setup_logger('embedding')
 
@@ -15,21 +16,19 @@ class EmbeddingCreator:
         self.cache_hits = 0
         self.cache_misses = 0
         
-    def __call__(self, input: str | List[str]) -> List[List[float]]:
+    async def __call__(self, texts: str | List[str]) -> List[List[float]]:
         """임베딩 생성
         
         Args:
-            input: 임베딩할 텍스트 또는 텍스트 리스트
+            texts: 임베딩할 텍스트 또는 텍스트 리스트
             
         Returns:
             임베딩 벡터 리스트
         """
         try:
             # 단일 텍스트인 경우 리스트로 변환
-            if isinstance(input, str):
-                texts = [input]
-            else:
-                texts = input
+            if isinstance(texts, str):
+                texts = [texts]
             
             # 각 텍스트에 대해 임베딩 생성
             embeddings = []
@@ -42,7 +41,7 @@ class EmbeddingCreator:
                     
                 # 새로운 임베딩 생성
                 self.cache_misses += 1
-                embedding = self.client.create_embedding(text)
+                embedding = await self.client.create_embedding(text)
                 self._cache[text] = embedding
                 embeddings.append(embedding)
             
@@ -51,7 +50,7 @@ class EmbeddingCreator:
         except Exception as e:
             logger.error(f"임베딩 생성 실패: {str(e)}")
             # 에러 발생 시 0으로 채워진 임베딩 반환
-            return [[0.0] * 1536] * (1 if isinstance(input, str) else len(input))
+            return [[0.0] * 1536] * len(texts)
         
     def get_cache_stats(self) -> dict:
         """캐시 통계 반환"""

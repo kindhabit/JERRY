@@ -1,3 +1,7 @@
+# OpenAI 설정
+openai:
+  embedding_model: text-embedding-ada-002
+
 # 통합 건강 매핑 설정
 
 # 1. 카테고리 정의
@@ -270,23 +274,29 @@ pubmed:
     dosage: 1.2
     warning: 1.4
 
-  # 검색 전략
-  search_strategies:
-    interaction:
-      - basic:
-          query: "{supp1} {supp2} interaction"
-          category: interaction
-      - advanced:
-          query: "{supp1} {supp2} drug interaction systematic review"
-          category: interaction
-    
-    combined:
-      - basic:
-          query: "{supplement} {health_keyword}"
-          category: clinical
-      - clinical:
-          query: "{supplement} {health_keyword} clinical trial"
-          category: clinical
+# 검색 전략
+search_strategies:
+  supplement:
+    - mechanism: "{name} mechanism of action"
+      interaction: "{name} drug interactions"
+      bioavailability: "{name} bioavailability absorption"
+      safety: "{name} safety adverse effects"
+      clinical: "{name} clinical trials efficacy"
+  health_keyword:
+    - pathophysiology: "{keyword} pathophysiology mechanism"
+      diagnosis: "{keyword} diagnosis clinical features"
+      treatment: "{keyword} treatment therapy management"
+      prevention: "{keyword} prevention risk factors"
+      nutrition: "{keyword} nutrition dietary factors"
+  interaction:
+    - drug_interaction: "{supp1} {supp2} interaction"
+      absorption: "{supp1} {supp2} absorption effect"
+      synergy: "{supp1} {supp2} synergistic effect"
+      metabolism: "{supp1} {supp2} metabolism pathway"
+  combined:
+    - effectiveness: "{supplement} effectiveness {health_keyword}"
+      dosage: "{supplement} dosage {health_keyword}"
+      warning: "{supplement} contraindication {health_keyword}"
 
 # 3. 건강 지표
 health_metrics:

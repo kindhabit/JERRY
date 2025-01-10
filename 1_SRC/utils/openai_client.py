@@ -18,7 +18,7 @@ class OpenAIClient:
         """텍스트의 임베딩 벡터 생성
         
         Args:
-            text: 임베딩할 텍스트
+            text: 임베딩할 텍스트ㅂ
             
         Returns:
             임베딩 벡터
@@ -62,6 +62,30 @@ class OpenAIClient:
         except Exception as e:
             logger.error(f"분석 실패: {str(e)}")
             return ""
+            
+    async def chat_completion(self, messages: List[Dict[str, str]]) -> Dict[str, str]:
+        """채팅 완료 요청
+        
+        Args:
+            messages: 메시지 목록 (role과 content를 포함한 딕셔너리의 리스트)
+            
+        Returns:
+            응답 메시지
+        """
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.settings['chat']['model'],
+                messages=messages,
+                temperature=self.settings['chat']['temperature']
+            )
+            return {
+                'content': response.choices[0].message.content,
+                'role': response.choices[0].message.role
+            }
+            
+        except Exception as e:
+            logger.error(f"채팅 완료 요청 실패: {str(e)}")
+            raise
             
     async def get_embeddings(self, text: str) -> List[float]:
         """텍스트의 임베딩 벡터를 생성"""

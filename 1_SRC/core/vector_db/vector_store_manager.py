@@ -275,6 +275,41 @@ class ChromaManager:
             mode = "업데이트" if is_update else "초기화"
             logger.info(f"실행 모드: {mode}")
             
+            # 컬렉션별 카테고리 정의
+            collection_categories = {
+                'supplements': {
+                    'mechanism': 0,
+                    'interaction': 0,
+                    'bioavailability': 0,
+                    'safety': 0,
+                    'clinical': 0
+                },
+                'interactions': {
+                    'drug_interaction': 0,
+                    'absorption': 0,
+                    'synergy': 0,
+                    'metabolism': 0
+                },
+                'health_data': {
+                    'pathophysiology': 0,
+                    'diagnosis': 0,
+                    'treatment': 0,
+                    'prevention': 0,
+                    'nutrition': 0
+                },
+                'health_metrics': {
+                    'cardiovascular': 0,
+                    'metabolic_endocrine': 0,
+                    'digestive': 0,
+                    'kidney': 0
+                },
+                'medical_terms': {
+                    'term_ko': 0,
+                    'term_en': 0,
+                    'category': 0
+                }
+            }
+            
             # PubMed 소스 초기화
             pubmed_source = PubMedSource()
             logger.info("PubMed 소스 초기화 완료")
@@ -287,7 +322,6 @@ class ChromaManager:
                 
                 logger.info(f"영양제 데이터 {mode} 시작 (총 {len(supplements)}개)")
                 supplements_limit = collection_limits.get("supplements") if collection_limits else None
-                supplements_count = 0
                 
                 # supplements 처리 여부 결정
                 should_process_supplements = supplements_limit is None or supplements_limit > 0
@@ -298,51 +332,60 @@ class ChromaManager:
                     for ko_name, en_name in supplements.items():
                         try:
                             logger.info(f"\n=== 영양제 처리 시작: {ko_name} (영문: {en_name}) ===")
-                            async for paper_data in pubmed_source.search_supplement(ko_name):
-                                try:
-                                    if update_stats is not None:
-                                        update_stats['total_checked'] += 1
+                            
+                            # 각 카테고리별로 검색 및 처리
+                            for category in collection_categories['supplements'].keys():
+                                if collection_categories['supplements'][category] >= supplements_limit:
+                                    continue
                                     
-                                    pmid = paper_data.get('pmid')
-                                    if is_update and pmid in existing_pmids:
-                                        logger.info(f"기존 PMID 스킵: {pmid}")
+                                search_query = f"{en_name} {CONFIG.get_pubmed_categories()[category]['search_term']}"
+                                async for paper_data in pubmed_source.search_supplement(ko_name, category=category, query=search_query):
+                                    try:
                                         if update_stats is not None:
-                                            update_stats['existing'] += 1
-                                        continue
-                                    
-                                    logger.info(f"새로운 PMID 처리 시작: {pmid}")
-                                    success = await self._add_paper_to_collection("supplements", paper_data)
-                                    
-                                    if success:
-                                        logger.info(f"새로운 PMID 처리 완료: {pmid}")
-                                        if update_stats is not None:
-                                            update_stats['new'] += 1
-                                        supplements_count += 1
-                                    else:
-                                        logger.warning(f"새로운 PMID 처리 실패: {pmid}")
+                                            update_stats['total_checked'] += 1
+                                        
+                                        pmid = paper_data.get('pmid')
+                                        if is_update and pmid in existing_pmids:
+                                            logger.info(f"기존 PMID 스킵: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['existing'] += 1
+                                            continue
+                                        
+                                        if collection_categories['supplements'][category] >= supplements_limit:
+                                            break
+                                        
+                                        logger.info(f"새로운 PMID 처리 시작: {pmid} (카테고리: {category})")
+                                        paper_data['category'] = category
+                                        success = await self._add_paper_to_collection("supplements", paper_data)
+                                        
+                                        if success:
+                                            logger.info(f"새로운 PMID 처리 완료: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['new'] += 1
+                                            collection_categories['supplements'][category] += 1
+                                        else:
+                                            logger.warning(f"새로운 PMID 처리 실패: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['failed'] += 1
+                                                
+                                    except Exception as e:
+                                        logger.error(f"논문 처리 실패 - PMID: {paper_data.get('pmid', 'unknown')}: {str(e)}")
                                         if update_stats is not None:
                                             update_stats['failed'] += 1
-                                    
-                                    if supplements_limit and supplements_count >= supplements_limit:
-                                        logger.info(f"supplements 컬렉션 제한 수({supplements_limit}개) 도달")
-                                        break
-                                        
-                                except Exception as e:
-                                    logger.error(f"논문 처리 실패 - PMID: {paper_data.get('pmid', 'unknown')}: {str(e)}")
-                                    if update_stats is not None:
-                                        update_stats['failed'] += 1
-                                    continue
+                                        continue
                                 
-                            if supplements_limit and supplements_count >= supplements_limit:
-                                break
+                                logger.info(f"{category} 카테고리 처리 완료: {collection_categories['supplements'][category]}/{supplements_limit}")
                                 
                         except Exception as e:
                             logger.error(f"영양제 처리 실패 ({ko_name}): {str(e)}")
                             continue
+                            
+                    logger.info("\n=== Supplements 컬렉션 카테고리별 수집 현황 ===")
+                    for category, count in collection_categories['supplements'].items():
+                        logger.info(f"- {category}: {count}/{supplements_limit}")
                 
                 # 2. Interactions 처리
                 interactions_limit = collection_limits.get("interactions") if collection_limits else None
-                interactions_count = 0
                 
                 # interactions 처리 여부 결정
                 should_process_interactions = interactions_limit is None or interactions_limit > 0
@@ -353,51 +396,58 @@ class ChromaManager:
                     logger.info(f"\n=== 상호작용 데이터 {mode} 시작 ===")
                     for ko_name, en_name in supplements.items():
                         try:
-                            async for paper_data in pubmed_source.search_interactions(ko_name):
-                                try:
-                                    if update_stats is not None:
-                                        update_stats['total_checked'] += 1
+                            for category in collection_categories['interactions'].keys():
+                                if collection_categories['interactions'][category] >= interactions_limit:
+                                    continue
                                     
-                                    pmid = paper_data.get('pmid')
-                                    if is_update and pmid in existing_pmids:
-                                        logger.info(f"기존 PMID 스킵: {pmid}")
+                                search_query = f"{en_name} {category.replace('_', ' ')}"
+                                async for paper_data in pubmed_source.search_interactions(ko_name, category=category, query=search_query):
+                                    try:
                                         if update_stats is not None:
-                                            update_stats['existing'] += 1
-                                        continue
-                                    
-                                    logger.info(f"새로운 PMID 처리 시작: {pmid}")
-                                    success = await self._add_paper_to_collection("interactions", paper_data)
-                                    
-                                    if success:
-                                        logger.info(f"새로운 PMID 처리 완료: {pmid}")
-                                        if update_stats is not None:
-                                            update_stats['new'] += 1
-                                        interactions_count += 1
-                                    else:
-                                        logger.warning(f"새로운 PMID 처리 실패: {pmid}")
+                                            update_stats['total_checked'] += 1
+                                        
+                                        pmid = paper_data.get('pmid')
+                                        if is_update and pmid in existing_pmids:
+                                            logger.info(f"기존 PMID 스킵: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['existing'] += 1
+                                            continue
+                                        
+                                        if collection_categories['interactions'][category] >= interactions_limit:
+                                            break
+                                        
+                                        logger.info(f"새로운 PMID 처리 시작: {pmid} (카테고리: {category})")
+                                        paper_data['category'] = category
+                                        success = await self._add_paper_to_collection("interactions", paper_data)
+                                        
+                                        if success:
+                                            logger.info(f"새로운 PMID 처리 완료: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['new'] += 1
+                                            collection_categories['interactions'][category] += 1
+                                        else:
+                                            logger.warning(f"새로운 PMID 처리 실패: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['failed'] += 1
+                                                
+                                    except Exception as e:
+                                        logger.error(f"논문 처리 실패 - PMID: {paper_data.get('pmid', 'unknown')}: {str(e)}")
                                         if update_stats is not None:
                                             update_stats['failed'] += 1
-                                    
-                                    if interactions_limit and interactions_count >= interactions_limit:
-                                        logger.info(f"interactions 컬렉션 제한 수({interactions_limit}개) 도달")
-                                        break
-                                        
-                                except Exception as e:
-                                    logger.error(f"논문 처리 실패 - PMID: {paper_data.get('pmid', 'unknown')}: {str(e)}")
-                                    if update_stats is not None:
-                                        update_stats['failed'] += 1
-                                    continue
+                                        continue
                                 
-                            if interactions_limit and interactions_count >= interactions_limit:
-                                break
+                                logger.info(f"{category} 카테고리 처리 완료: {collection_categories['interactions'][category]}/{interactions_limit}")
                                 
                         except Exception as e:
                             logger.error(f"상호작용 처리 실패 ({ko_name}): {str(e)}")
                             continue
+                            
+                    logger.info("\n=== Interactions 컬렉션 카테고리별 수집 현황 ===")
+                    for category, count in collection_categories['interactions'].items():
+                        logger.info(f"- {category}: {count}/{interactions_limit}")
                 
                 # 3. Health Data 처리
                 health_data_limit = collection_limits.get("health_data") if collection_limits else None
-                health_data_count = 0
                 
                 # health_data 처리 여부 결정
                 should_process_health_data = health_data_limit is None or health_data_limit > 0
@@ -408,47 +458,55 @@ class ChromaManager:
                     logger.info(f"\n=== 건강 데이터 {mode} 시작 ===")
                     for ko_name, en_name in supplements.items():
                         try:
-                            async for paper_data in pubmed_source.search_health_data(ko_name):
-                                try:
-                                    if update_stats is not None:
-                                        update_stats['total_checked'] += 1
+                            for category in collection_categories['health_data'].keys():
+                                if collection_categories['health_data'][category] >= health_data_limit:
+                                    continue
                                     
-                                    pmid = paper_data.get('pmid')
-                                    if is_update and pmid in existing_pmids:
-                                        logger.info(f"기존 PMID 스킵: {pmid}")
+                                search_query = f"{en_name} {category}"
+                                async for paper_data in pubmed_source.search_health_data(ko_name, category=category, query=search_query):
+                                    try:
                                         if update_stats is not None:
-                                            update_stats['existing'] += 1
-                                        continue
-                                    
-                                    logger.info(f"새로운 PMID 처리 시작: {pmid}")
-                                    success = await self._add_paper_to_collection("health_data", paper_data)
-                                    
-                                    if success:
-                                        logger.info(f"새로운 PMID 처리 완료: {pmid}")
-                                        if update_stats is not None:
-                                            update_stats['new'] += 1
-                                        health_data_count += 1
-                                    else:
-                                        logger.warning(f"새로운 PMID 처리 실패: {pmid}")
+                                            update_stats['total_checked'] += 1
+                                        
+                                        pmid = paper_data.get('pmid')
+                                        if is_update and pmid in existing_pmids:
+                                            logger.info(f"기존 PMID 스킵: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['existing'] += 1
+                                            continue
+                                        
+                                        if collection_categories['health_data'][category] >= health_data_limit:
+                                            break
+                                        
+                                        logger.info(f"새로운 PMID 처리 시작: {pmid} (카테고리: {category})")
+                                        paper_data['category'] = category
+                                        success = await self._add_paper_to_collection("health_data", paper_data)
+                                        
+                                        if success:
+                                            logger.info(f"새로운 PMID 처리 완료: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['new'] += 1
+                                            collection_categories['health_data'][category] += 1
+                                        else:
+                                            logger.warning(f"새로운 PMID 처리 실패: {pmid}")
+                                            if update_stats is not None:
+                                                update_stats['failed'] += 1
+                                                
+                                    except Exception as e:
+                                        logger.error(f"논문 처리 실패 - PMID: {paper_data.get('pmid', 'unknown')}: {str(e)}")
                                         if update_stats is not None:
                                             update_stats['failed'] += 1
-                                    
-                                    if health_data_limit and health_data_count >= health_data_limit:
-                                        logger.info(f"health_data 컬렉션 제한 수({health_data_limit}개) 도달")
-                                        break
-                                        
-                                except Exception as e:
-                                    logger.error(f"논문 처리 실패 - PMID: {paper_data.get('pmid', 'unknown')}: {str(e)}")
-                                    if update_stats is not None:
-                                        update_stats['failed'] += 1
-                                    continue
+                                        continue
                                 
-                            if health_data_limit and health_data_count >= health_data_limit:
-                                break
+                                logger.info(f"{category} 카테고리 처리 완료: {collection_categories['health_data'][category]}/{health_data_limit}")
                                 
                         except Exception as e:
                             logger.error(f"건강 데이터 처리 실패 ({ko_name}): {str(e)}")
                             continue
+                            
+                    logger.info("\n=== Health Data 컬렉션 카테고리별 수집 현황 ===")
+                    for category, count in collection_categories['health_data'].items():
+                        logger.info(f"- {category}: {count}/{health_data_limit}")
                 
             finally:
                 await pubmed_source.close()
@@ -456,15 +514,13 @@ class ChromaManager:
             # 최종 처리 결과 로깅
             logger.info(f"\n=== initialize_data 메서드 완료 ({mode}) ===")
             if collection_limits:
-                if supplements_limit is not None:
-                    status = "건너뜀" if supplements_limit == 0 else f"{supplements_count}/{supplements_limit}"
-                    logger.info(f"supplements 컬렉션: {status}")
-                if interactions_limit is not None:
-                    status = "건너뜀" if interactions_limit == 0 else f"{interactions_count}/{interactions_limit}"
-                    logger.info(f"interactions 컬렉션: {status}")
-                if health_data_limit is not None:
-                    status = "건너뜀" if health_data_limit == 0 else f"{health_data_count}/{health_data_limit}"
-                    logger.info(f"health_data 컬렉션: {status}")
+                for collection_name, categories in collection_categories.items():
+                    limit = collection_limits.get(collection_name)
+                    if limit is not None:
+                        logger.info(f"\n{collection_name} 컬렉션 카테고리별 최종 현황:")
+                        for category, count in categories.items():
+                            status = "건너뜀" if limit == 0 else f"{count}/{limit}"
+                            logger.info(f"- {category}: {status}")
             
         except Exception as e:
             logger.error(f"initialize_data 메서드 실패: {str(e)}")
@@ -521,7 +577,7 @@ class ChromaManager:
                 ids=[paper["pmid"]]
             )
             
-            logger.info(f"논문 데이터 저장 완료 - PMID: {paper['pmid']}")
+            logger.info(f"논문 데이터 저장 완료료 - PMID: {paper['pmid']}")
             return True
             
         except Exception as e:
@@ -569,159 +625,108 @@ class ChromaManager:
             logger.error(f"ChromaManager 초기화 실패: {str(e)}")
             raise
 
-    @classmethod
-    async def main(cls):
-        """메인 실행 함수"""
+    @staticmethod
+    async def main():
+        """인 함수"""
+        parser = argparse.ArgumentParser(description='Vector Store Manager')
+        parser.add_argument('--action', choices=['stats', 'update', 'reinit'], help='실행할 작업')
+        parser.add_argument('--debug', action='store_true', help='디버그 모드 활성화')
+        parser.add_argument('--force', action='store_true', help='강제 실행')
+        parser.add_argument('--supplements-limit', type=int, help='영양제 데이터 제한')
+        parser.add_argument('--interactions-limit', type=int, help='상호작용 데이터 제한')
+        parser.add_argument('--health-data-limit', type=int, help='건강 데이터 제한')
+        parser.add_argument('--health-metrics-limit', type=int, help='건강 지표 제한')
+        parser.add_argument('--medical-terms-limit', type=int, help='의학 용어 제한')
+        args = parser.parse_args()
+        
+        # Vector Store Manager 초기화
+        manager = ChromaManager()
+        
         try:
-            parser = argparse.ArgumentParser()
-            parser.add_argument("--action", choices=["reinit", "update", "stats"], required=True)
-            parser.add_argument("--force", action="store_true")
-            parser.add_argument("--debug", action="store_true")
-            parser.add_argument("--supplements-limit", type=int, help="영양제 데이터 처리 제한 수")
-            parser.add_argument("--interactions-limit", type=int, help="상호작용 데이터 처리 제한 수")
-            parser.add_argument("--health-data-limit", type=int, help="건강 데이터 처리 제한 수")
-            args = parser.parse_args()
-
-            manager = ChromaManager()
-            if args.action == "reinit":
-                await manager.reinitialize_database(force=args.force)
-            elif args.action == "update":
-                limits = {
-                    "supplements": args.supplements_limit,
-                    "interactions": args.interactions_limit,
-                    "health_data": args.health_data_limit
-                }
-                await manager.update_database(collection_limits=limits)
-            elif args.action == "stats":
+            if args.action == 'stats':
+                # 통계 조회
                 stats = await manager.show_stats()
                 logger.info(f"\n=== Vector Store 상태 ===\n{json.dumps(stats, indent=2, ensure_ascii=False)}")
-
+                return
+            elif args.action == 'reinit':
+                # 데이터베이스 재초기화
+                await manager.reinitialize_database(force=args.force)
+                return
+            elif args.action == 'update':
+                # 컬렉션별 제한 설정
+                collection_limits = {
+                    "supplements": args.supplements_limit,
+                    "interactions": args.interactions_limit,
+                    "health_data": args.health_data_limit,
+                    "health_metrics": args.health_metrics_limit,
+                    "medical_terms": args.medical_terms_limit
+                }
+                
+                # 데이터베이스 업데이트
+                await manager.update_database(collection_limits=collection_limits)
+                return
+                
         except Exception as e:
-            logger.error(f"작업 실패: {str(e)}")
+            logger.error(f"Vector Store 작업 중 오류 발생: {str(e)}")
             raise
 
-    async def get_supplement_interaction(self, health_data: Dict[str, Any], current_supplements: List[str]) -> Dict[str, Any]:
-        # 최소 필요 문서 수와 관련성 임계값 설정
-        MIN_REQUIRED_DOCS = 3
-        MINIMUM_RELEVANCE_THRESHOLD = 0.7
-
+    async def get_supplement_interaction(self, health_data: Dict, current_supplements: List[str]) -> Dict:
+        """영양제 간 상호작용 분석"""
         try:
-            if not isinstance(health_data, dict):
-                raise ValueError("health_data must be a dictionary")
+            # 1. 영양제 관련 정보 검색
+            supplements_info = []
+            for supp in current_supplements:
+                results = self.collections['supplements'].query(
+                    query_texts=[supp],
+                    n_results=5
+                )
+                if results and results['documents']:
+                    supplements_info.extend(results['documents'][0])
 
-            # 건강 데이터에서 필요한 정보 추출
-            symptoms = health_data.get('symptoms', [])
-            health_metrics = health_data.get('health_metrics', {})
-            lifestyle_factors = health_data.get('lifestyle_factors', {})
+            # 2. 상호작용 정보 검색
+            interaction_results = self.collections['interactions'].query(
+                query_texts=[" ".join(current_supplements)],
+                n_results=3
+            )
 
-            logger.info(f"영양제 상호작용 분석 시작: {current_supplements}")
-            logger.debug(f"건강 데이터: {json.dumps(health_data, ensure_ascii=False)}")
-
-            # 검색 쿼리 구성
-            query = f"""
-            증상: {', '.join(symptoms)}
-            현재 복용 중인 영양제: {', '.join(current_supplements)}
-            건강 지표: {json.dumps(health_metrics, ensure_ascii=False)}
-            생활습관: {json.dumps(lifestyle_factors, ensure_ascii=False)}
-            위 정보와 관련된 영양제 상호작용 및 추천 연구
+            # 3. GPT를 통한 분석
+            analysis_prompt = f"""
+            다음 영양제들의 상호작용을 분석해주세요:
+            영양제: {', '.join(current_supplements)}
+            
+            영양제 정보:
+            {supplements_info}
+            
+            상호작용 정보:
+            {interaction_results['documents'] if interaction_results['documents'] else '관련 정보 없음'}
+            
+            건강 데이터:
+            {json.dumps(health_data, ensure_ascii=False)}
+            
+            다음 형식으로 응답해주세요:
+            1. 상호작용 여부
+            2. 상호작용 메커니즘
+            3. 주의사항
+            4. 근거 자료
             """
 
-            logger.info("ChromaDB 검색 수행 중...")
-            # interactions 컬렉션에서 검색 수행
-            collection = self.client.get_collection("interactions")
-            results = collection.query(
-                query_texts=[query],
-                n_results=5
+            analysis = await self.openai_client.chat_completion(
+                messages=[{"role": "user", "content": analysis_prompt}]
             )
 
-            # 검색 결과 검증
-            if not results['documents'] or len(results['documents'][0]) < MIN_REQUIRED_DOCS:
-                logger.warning(f"불충분한 데이터: {len(results['documents'][0]) if results['documents'] else 0}/{MIN_REQUIRED_DOCS}")
-                return {
-                    "status": "insufficient_data",
-                    "message": "죄송합니다. 현재 해당 건강 정보와 영양제 조합에 대한 충분한 연구 데이터가 없습니다.",
-                    "available_data": {
-                        "found_documents": len(results['documents'][0]) if results['documents'] else 0,
-                        "required_minimum": MIN_REQUIRED_DOCS,
-                        "suggestion": "더 많은 데이터가 수집된 후에 다시 시도해주세요."
-                    }
-                }
-
-            # 검색 결과의 관련성 검증
-            if results['distances'] and max(results['distances'][0]) < MINIMUM_RELEVANCE_THRESHOLD:
-                logger.warning(f"낮은 관련성: {max(results['distances'][0])}/{MINIMUM_RELEVANCE_THRESHOLD}")
-                return {
-                    "status": "low_relevance",
-                    "message": "입력하신 건강 정보와 직접적으로 관련된 연구 결과를 찾지 못했습니다.",
-                    "suggestion": "좀 더 일반적인 건강 지표나 증상으로 다시 검색해보시겠습니까?"
-                }
-
-            # LLM 프롬프트 구성
-            context = "\n".join(results['documents'][0])
-            logger.info("LLM 분석 시작...")
-            
-            # 응답 형식 템플릿
-            response_format = {
-                "recommendations": {
-                    "영양제_이름": {
-                        "confidence": "high/medium/low",
-                        "reason": "추천 이유",
-                        "evidence": "연구 근거",
-                        "interactions": "상호작용 정보",
-                        "precautions": "주의사항"
-                    }
-                },
-                "data_quality": {
-                    "confidence_level": "high/medium/low",
-                    "limitations": ["고려해야 할 제한사항들"]
-                }
-            }
-
-            # 프롬프트 구성
-            prompt = (
-                "다음 사용자의 건강 정보와 검색된 연구 결과를 바탕으로 영양제 추천 분석을 수행해주세요:\n\n"
-                f"사용자 건강 정보:\n"
-                f"- 증상: {symptoms}\n"
-                f"- 현재 복용 중: {current_supplements}\n"
-                f"- 건강 지표: {health_metrics}\n"
-                f"- 생활습관: {lifestyle_factors}\n\n"
-                f"검색된 연구 결과:\n{context}\n\n"
-                "다음 사항들을 고려하여 응답해주세요:\n"
-                "1. 확실한 근거가 있는 내용만 포함할 것\n"
-                "2. 데이터가 불충분한 경우 명확히 표시할 것\n"
-                "3. 추측이나 일반화된 조언은 피할 것\n"
-                "4. 각 추천에 대한 신뢰도 수준을 명시할 것\n\n"
-                f"응답 형식:\n{json.dumps(response_format, indent=2, ensure_ascii=False)}"
-            )
-
-            # LLM을 통한 분석 수행
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4-1106-preview",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1
-            )
-            
-            logger.info("LLM 분석 완료")
-            analysis_result = json.loads(response.choices[0].message.content)
-            
+            # 4. 결과 반환
             return {
                 "status": "success",
-                "analysis_id": str(uuid.uuid4()),
-                **analysis_result
+                "supplements": current_supplements,
+                "description": analysis['content'],
+                "evidence": interaction_results['documents'] if interaction_results['documents'] else []
             }
-            
-        except ValueError as ve:
-            logger.error(f"잘못된 입력 데이터: {str(ve)}")
-            return {
-                "status": "error",
-                "message": f"잘못된 입력 데이터: {str(ve)}"
-            }
+
         except Exception as e:
-            logger.error(f"영양제 상호작용 분석 중 오류 발생: {str(e)}")
+            logger.error(f"영양제 상호작용 분석 중 오류: {str(e)}")
             return {
                 "status": "error",
-                "message": "분석 중 오류가 발생했습니다.",
-                "error_details": str(e)
+                "error": str(e)
             }
 
     async def get_health_impacts(self, supplement: str, health_data: Dict) -> List[Dict]:
@@ -754,6 +759,231 @@ class ChromaManager:
             
         except Exception as e:
             logger.error(f"건강 영향 검색 실패 ({supplement}): {str(e)}")
+            return []
+
+    async def update_supplements(self, limit: int = None):
+        """영양제 데이터 업데이트"""
+        logger.info("영양제 데이터 업데이트 시작")
+        
+        # 카테고리별 카운터 초기화
+        category_counts = {
+            'mechanism': 0,
+            'interaction': 0,
+            'bioavailability': 0,
+            'safety': 0,
+            'clinical': 0
+        }
+        
+        # 각 영양제별로 처리
+        for supplement_name in self.data_source.supplements.keys():
+            # 각 카테고리별로 처리
+            for category in category_counts.keys():
+                # 카테고리 제한 확인
+                if limit and category_counts[category] >= limit:
+                    logger.info(f"{category} 카테고리 제한({limit})에 도달")
+                    continue
+                    
+                try:
+                    # 카테고리별 검색 수행
+                    async for paper in self.data_source.search_supplement(supplement_name, category):
+                        try:
+                            # 벡터 저장소에 추가
+                            await self.supplements_collection.add(
+                                documents=[paper['abstract']],
+                                metadatas=[{
+                                    'pmid': paper['pmid'],
+                                    'title': paper['title'],
+                                    'category': paper['category'],
+                                    'weight': paper['weight'],
+                                    'description': paper['description']
+                                }],
+                                ids=[f"supp_{paper['pmid']}"]
+                            )
+                            
+                            # 카운터 증가
+                            category_counts[category] += 1
+                            logger.info(f"영양제 {supplement_name} - {category} 카테고리 문서 추가 완료 (현재: {category_counts[category]})")
+                            
+                        except Exception as e:
+                            logger.error(f"벡터 저장소 추가 중 오류 발생: {str(e)}")
+                            continue
+                            
+                except Exception as e:
+                    logger.error(f"영양제 {supplement_name} 검색 중 오류 발생: {str(e)}")
+                    continue
+                    
+        logger.info("영양제 데이터 업데이트 완료")
+        logger.info(f"카테고리별 문서 수: {category_counts}")
+
+    async def update_interactions(self, limit: int = None):
+        """상호작용 데이터 업데이트"""
+        logger.info("상호작용 데이터 업데이트 시작")
+        
+        # 카테고리별 카운터 초기화
+        category_counts = {
+            'drug_interaction': 0,
+            'absorption': 0,
+            'synergy': 0,
+            'metabolism': 0
+        }
+        
+        # 각 영양제별로 처리
+        for supplement_name in self.data_source.supplements.keys():
+            # 각 카테고리별로 처리
+            for category in category_counts.keys():
+                # 카테고리 제한 확인
+                if limit and category_counts[category] >= limit:
+                    logger.info(f"{category} 카테고리 제한({limit})에 도달")
+                    continue
+                    
+                try:
+                    # 카테고리별 검색 수행
+                    async for paper in self.data_source.search_interactions(supplement_name, category):
+                        try:
+                            # 벡터 저장소에 추가
+                            await self.interactions_collection.add(
+                                documents=[paper['abstract']],
+                                metadatas=[{
+                                    'pmid': paper['pmid'],
+                                    'title': paper['title'],
+                                    'category': paper['category'],
+                                    'weight': paper['weight'],
+                                    'description': paper['description']
+                                }],
+                                ids=[f"int_{paper['pmid']}"]
+                            )
+                            
+                            # 카운터 증가
+                            category_counts[category] += 1
+                            logger.info(f"영양제 {supplement_name} - {category} 카테고리 문서 추가 완료 (현재: {category_counts[category]})")
+                            
+                        except Exception as e:
+                            logger.error(f"벡터 저장소 추가 중 오류 발생: {str(e)}")
+                            continue
+                            
+                except Exception as e:
+                    logger.error(f"영양제 {supplement_name} 검색 중 오류 발생: {str(e)}")
+                    continue
+                    
+        logger.info("상호작용 데이터 업데이트 완료")
+        logger.info(f"카테고리별 문서 수: {category_counts}")
+
+    async def update_health_data(self, limit: int = None):
+        """건강 데이터 업데이트"""
+        logger.info("건강 데이터 업데이트 시작")
+        
+        # 카테고리별 카운터 초기화
+        category_counts = {
+            'pathophysiology': 0,
+            'diagnosis': 0,
+            'treatment': 0,
+            'prevention': 0,
+            'nutrition': 0
+        }
+        
+        # 각 영양제별로 처리
+        for supplement_name in self.data_source.supplements.keys():
+            # 각 카테고리별로 처리
+            for category in category_counts.keys():
+                # 카테고리 제한 확인
+                if limit and category_counts[category] >= limit:
+                    logger.info(f"{category} 카테고리 제한({limit})에 도달")
+                    continue
+                    
+                try:
+                    # 카테고리별 검색 수행
+                    async for paper in self.data_source.search_health_data(supplement_name, category):
+                        try:
+                            # 벡터 저장소에 추가
+                            await self.health_data_collection.add(
+                                documents=[paper['abstract']],
+                                metadatas=[{
+                                    'pmid': paper['pmid'],
+                                    'title': paper['title'],
+                                    'category': paper['category'],
+                                    'weight': paper['weight'],
+                                    'description': paper['description']
+                                }],
+                                ids=[f"health_{paper['pmid']}"]
+                            )
+                            
+                            # 카운터 증가
+                            category_counts[category] += 1
+                            logger.info(f"영양제 {supplement_name} - {category} 카테고리 문서 추가 완료 (현재: {category_counts[category]})")
+                            
+                        except Exception as e:
+                            logger.error(f"벡터 저장소 추가 중 오류 발생: {str(e)}")
+                            continue
+                            
+                except Exception as e:
+                    logger.error(f"영양제 {supplement_name} 검색 중 오류 발생: {str(e)}")
+                    continue
+                    
+        logger.info("건강 데이터 업데이트 완료")
+        logger.info(f"카테고리별 문서 수: {category_counts}")
+
+    async def search_supplements_for_condition(self, condition: str, n_results: int = 3) -> List[Dict]:
+        """건강 상태에 따른 영양제 검색"""
+        try:
+            # 검색 쿼리 구성
+            query = f"건강 상태 '{condition}'에 도움이 되는 영양제 추천"
+            
+            # supplements 컬렉션에서 검색
+            collection = self.client.get_collection("supplements")
+            query_embedding = await self.embedding_creator(query)
+            
+            results = collection.query(
+                query_embeddings=[query_embedding[0]],
+                n_results=n_results
+            )
+            
+            # 결과 포맷팅
+            supplements = []
+            for i, (doc, metadata, distance) in enumerate(zip(
+                results["documents"],
+                results["metadatas"],
+                results["distances"]
+            )):
+                supplements.append({
+                    "name": metadata.get("name", f"supplement_{i}"),
+                    "description": doc,
+                    "confidence": float(distance),
+                    "evidence": metadata.get("evidence", []),
+                    "related": metadata.get("related_supplements", [])
+                })
+            
+            return supplements
+            
+        except Exception as e:
+            logger.error(f"영양제 검색 중 오류: {str(e)}")
+            return []
+
+    async def search_supplements(self, query: str, n_results: int = 5) -> List[Dict]:
+        """영양제 검색"""
+        try:
+            # 1. 임베딩 생성
+            query_embedding = await self.embedding_creator(query)
+            
+            # 2. supplements 컬렉션 검색
+            supplements_collection = self.client.get_collection("supplements")
+            results = supplements_collection.query(
+                query_embeddings=[query_embedding[0]],
+                n_results=n_results
+            )
+            
+            # 3. 결과 포맷팅
+            supplements = []
+            if results["documents"]:
+                for i, doc in enumerate(results["documents"]):
+                    supplements.append({
+                        "document": doc,
+                        "metadata": results["metadatas"][i] if results["metadatas"] else {}
+                    })
+            
+            return supplements
+            
+        except Exception as e:
+            logger.error(f"영양제 검색 중 오류: {str(e)}")
             return []
 
 if __name__ == "__main__":

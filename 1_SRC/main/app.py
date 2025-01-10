@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 import yaml
 from contextlib import asynccontextmanager
+from api.routes import supplements
 
 # 메모리 제한 설정
 def limit_memory(max_mem_mb=1024):  # 1GB
@@ -53,6 +54,9 @@ async def lifespan(app: FastAPI):
 
 # FastAPI 애플리케이션 초기화
 kindhabit_app = FastAPI(lifespan=lifespan)
+
+# 라우터 등록
+kindhabit_app.include_router(supplements.router, prefix="/api/supplements", tags=["supplements"])
 
 # 로그 설정
 log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')

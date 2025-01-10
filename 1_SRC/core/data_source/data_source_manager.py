@@ -94,7 +94,12 @@ class PubMedSource:
             await self.session.close()
             self.session = None
         
-    async def search_supplement(self, supplement_name: str) -> AsyncGenerator[Dict, None]:
+    async def search_supplement(
+        self,
+        supplement_name: str,
+        category: str = None,
+        query: str = None
+    ) -> AsyncGenerator[Dict, None]:
         """영양제 관련 PubMed 검색 수행"""
         logger.info(f"영양제 검색 시작: {supplement_name}")
         
@@ -104,41 +109,41 @@ class PubMedSource:
             logger.error(f"영양제 {supplement_name}의 영어 이름을 찾을 수 없습니다.")
             return
             
-        # 각 카테고리별로 검색 수행
-        for category_name, category_info in self.categories.items():
-            search_term = category_info['search_term']
-            weight = category_info['weight']
-            description = category_info['description']
+        # 검색 쿼리 구성
+        if query:
+            search_query = query
+        else:
+            category_info = self.categories.get(category, {})
+            search_term = category_info.get('search_term', '')
+            search_query = f"{english_name} {search_term} AND 2022:2025[pdat]"
             
-            # 검색 쿼리 구성
-            query = f"{english_name} {search_term} AND 2022:2025[pdat]"
-            logger.info(f"검색 쿼리: {query} (카테고리: {category_name} - {description})")
-            
-            try:
-                # PubMed 검색 수행 및 각 논문 처리
-                async for paper in self._search_pubmed(query):
-                    try:
-                        # 기본 정보 추가
-                        paper['category'] = category_name
-                        paper['weight'] = weight
-                        paper['description'] = description
+        logger.info(f"검색 쿼리: {search_query} (카테고리: {category})")
+        
+        try:
+            # PubMed 검색 수행 및 각 논문 처리
+            async for paper in self._search_pubmed(search_query):
+                try:
+                    # 기본 정보 추가
+                    paper['category'] = category
+                    paper['weight'] = self.category_weights.get(category, 1.0)
+                    paper['description'] = f"{supplement_name}의 {category} 관련 연구"
+                    
+                    # 논문 처리
+                    processed_paper = await self._process_single_paper(paper)
+                    if processed_paper is None:
+                        logger.warning(f"논문 처리 실패 - 다음 논문으로 진행 - PMID: {paper.get('pmid')}")
+                        continue
                         
-                        # 논문 처리
-                        processed_paper = await self._process_single_paper(paper)
-                        if processed_paper is None:  # 처리 실패시
-                            logger.warning(f"논문 처리 실패 - 다음 논문으로 진행 - PMID: {paper.get('pmid')}")
-                            continue  # 다음 논문으로 진행
-                            
-                        yield processed_paper
-                        
-                    except Exception as e:
-                        logger.error(f"논문 처리 중 오류 발생 - PMID: {paper.get('pmid')}: {str(e)}")
-                        continue  # 다음 논문으로 진행
-                        
-            except Exception as e:
-                logger.error(f"PubMed 검색 중 오류 발생: {str(e)}")
-                continue  # 다음 카테고리로 진행
-                
+                    yield processed_paper
+                    
+                except Exception as e:
+                    logger.error(f"논문 처리 중 오류 발생 - PMID: {paper.get('pmid')}: {str(e)}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"PubMed 검색 중 오류 발생: {str(e)}")
+            return
+
     async def _search_pubmed(self, query: str) -> AsyncGenerator[Dict, None]:
         """PubMed API를 통한 검색 수행"""
         try:
@@ -464,7 +469,12 @@ class PubMedSource:
             logger.error("스택 트레이스:", exc_info=True)
             return None 
 
-    async def search_interactions(self, supplement_name: str) -> AsyncGenerator[Dict, None]:
+    async def search_interactions(
+        self,
+        supplement_name: str,
+        category: str = None,
+        query: str = None
+    ) -> AsyncGenerator[Dict, None]:
         """영양제 상호작용 검색 수행"""
         logger.info(f"상호작용 검색 시작: {supplement_name}")
         
@@ -474,6 +484,32 @@ class PubMedSource:
             logger.error(f"영양제 {supplement_name}의 영어 이름을 찾을 수 없습니다.")
             return
         
+        # 직접 주어진 쿼리가 있는 경우
+        if query:
+            logger.info(f"직접 주어진 쿼리 사용: {query}")
+            try:
+                async for paper in self._search_pubmed(query):
+                    try:
+                        # 기본 정보 추가
+                        paper['category'] = category if category else 'interaction'
+                        paper['weight'] = self.category_weights.get('interaction', 1.0)
+                        paper['description'] = f"{supplement_name}의 상호작용 연구"
+                        
+                        # 논문 처리
+                        processed_paper = await self._process_single_paper(paper)
+                        if processed_paper is None:
+                            continue
+                            
+                        yield processed_paper
+                        
+                    except Exception as e:
+                        logger.error(f"논문 처리 중 오류 발생 - PMID: {paper.get('pmid')}: {str(e)}")
+                        continue
+            except Exception as e:
+                logger.error(f"PubMed 검색 중 오류 발생: {str(e)}")
+                return
+            return
+
         # 다른 영양제들과의 상호작용 검색
         for other_supp_name, other_supp_eng in self.supplements.items():
             if other_supp_name == supplement_name:
@@ -483,17 +519,20 @@ class PubMedSource:
             strategies = self.search_strategies.get('interaction', [])
             for strategy in strategies:
                 for strategy_name, strategy_query in strategy.items():
+                    if category and strategy_name != category:
+                        continue  # 특정 카테고리만 검색하는 경우
+                    
                     # 검색 쿼리 구성 (예: "Vitamin C Vitamin D interaction")
-                    query = strategy_query.format(
+                    search_query = strategy_query.format(
                         supp1=english_name,
                         supp2=other_supp_eng
                     ) + " AND 2022:2025[pdat]"
                     
-                    logger.info(f"검색 쿼리: {query} (상호작용: {other_supp_name}, 전략: {strategy_name})")
+                    logger.info(f"검색 쿼리: {search_query} (상호작용: {other_supp_name}, 전략: {strategy_name})")
                     
                     try:
                         # PubMed 검색 수행 및 각 논문 처리
-                        async for paper in self._search_pubmed(query):
+                        async for paper in self._search_pubmed(search_query):
                             try:
                                 # 기본 정보 추가
                                 paper['category'] = 'interaction'
@@ -516,8 +555,13 @@ class PubMedSource:
                     except Exception as e:
                         logger.error(f"PubMed 검색 중 오류 발생: {str(e)}")
                         continue
-                        
-    async def search_health_data(self, supplement_name: str) -> AsyncGenerator[Dict, None]:
+
+    async def search_health_data(
+        self,
+        supplement_name: str,
+        category: str = None,
+        query: str = None
+    ) -> AsyncGenerator[Dict, None]:
         """영양제 건강 데이터 검색 수행"""
         logger.info(f"건강 데이터 검색 시작: {supplement_name}")
         
@@ -526,12 +570,41 @@ class PubMedSource:
         if not english_name:
             logger.error(f"영양제 {supplement_name}의 영어 이름을 찾을 수 없습니다.")
             return
+            
+        # 직접 주어진 쿼리가 있는 경우
+        if query:
+            logger.info(f"직접 주어진 쿼리 사용: {query}")
+            try:
+                async for paper in self._search_pubmed(query):
+                    try:
+                        # 기본 정보 추가
+                        paper['category'] = category if category else 'health_data'
+                        paper['weight'] = self.category_weights.get('health_data', 1.0)
+                        paper['description'] = f"{supplement_name}의 건강 관련 연구"
+                        
+                        # 논문 처리
+                        processed_paper = await self._process_single_paper(paper)
+                        if processed_paper is None:
+                            continue
+                            
+                        yield processed_paper
+                        
+                    except Exception as e:
+                        logger.error(f"논문 처리 중 오류 발생 - PMID: {paper.get('pmid')}: {str(e)}")
+                        continue
+            except Exception as e:
+                logger.error(f"PubMed 검색 중 오류 발생: {str(e)}")
+                return
+            return
         
         # 건강 키워드 가져오기
         health_keywords = CONFIG.get_health_keywords()
         
         # 각 건강 키워드에 대해 검색
         for category_id, category_info in health_keywords.items():
+            if category and category_id != category:
+                continue  # 특정 카테고리만 검색하는 경우
+                
             search_terms = category_info.get('search_terms', [])
             category_name = category_info.get('name', category_id)
             
@@ -541,16 +614,16 @@ class PubMedSource:
                 for strategy_name, strategy_query in strategy.items():
                     for search_term in search_terms:
                         # 검색 쿼리 구성 (예: "Vitamin C effectiveness cardiovascular")
-                        query = strategy_query.format(
+                        search_query = strategy_query.format(
                             supplement=english_name,
                             health_keyword=search_term
                         ) + " AND 2022:2025[pdat]"
                         
-                        logger.info(f"검색 쿼리: {query} (카테고리: {category_id}, 전략: {strategy_name})")
+                        logger.info(f"검색 쿼리: {search_query} (카테고리: {category_id}, 전략: {strategy_name})")
                         
                         try:
                             # PubMed 검색 수행 및 각 논문 처리
-                            async for paper in self._search_pubmed(query):
+                            async for paper in self._search_pubmed(search_query):
                                 try:
                                     # 기본 정보 추가
                                     paper['category'] = 'health_data'
