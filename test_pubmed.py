@@ -1,5 +1,5 @@
 import asyncio
-from core.data_source.data_source_manager import DataSourceManager
+from src.core.data_source.data_source_manager import DataSourceManager
 
 async def test_pubmed():
     manager = DataSourceManager()

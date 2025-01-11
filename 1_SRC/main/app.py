@@ -1,11 +1,12 @@
 import logging
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi.security import OAuth2PasswordRequestForm
 from core.vector_db.vector_store_manager import ChromaManager
 from config.config_loader import CONFIG, ConfigLoader
 import os
 import resource
 import gc
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 import uuid
 from core.services.health_service import HealthService
 import json
@@ -17,6 +18,9 @@ import uvicorn
 import yaml
 from contextlib import asynccontextmanager
 from api.routes import supplements
+from utils.logger_config import setup_logger
+
+logger = setup_logger('app')
 
 # 메모리 제한 설정
 def limit_memory(max_mem_mb=1024):  # 1GB
@@ -292,24 +296,36 @@ def sort_by_relevance(results: List[Dict]) -> List[Dict]:
         
     return sorted(results, key=get_score, reverse=True)
 
-def extract_conditions(data: Dict) -> List[str]:
+async def extract_conditions(data: Dict) -> List[str]:
     """건강 데이터에서 조건 추출"""
-    conditions = []
-    health_keywords = get_health_keywords()
-    
-    # 키워드 매핑 생성
-    keyword_mapping = {
-        keyword.replace(" ", "_").lower(): [keyword]
-        for keyword in health_keywords
-    }
-    
-    # 데이터의 각 필드를 검사하여 매칭되는 키워드 찾기
-    for field, values in data.items():
-        for key, keywords in keyword_mapping.items():
-            if any(keyword.lower() in str(values).lower() for keyword in keywords):
-                conditions.append(key)
-    
-    return list(set(conditions))  # 중복 제거
+    try:
+        conditions = []
+        chroma_manager = ChromaManager()
+        
+        # medical_terms 컬렉션에서 의학 용어 가져오기
+        medical_terms_collection = chroma_manager.client.get_collection('medical_terms')
+        terms_data = medical_terms_collection.get()
+        
+        # 키워드 매핑 생성
+        keyword_mapping = {}
+        for idx, metadata in enumerate(terms_data['metadatas']):
+            kr_term = metadata.get('term_ko', '')
+            en_term = metadata.get('term_en', '')
+            if kr_term and en_term:
+                key = kr_term.replace(" ", "_").lower()
+                keyword_mapping[key] = [kr_term, en_term]
+        
+        # 데이터의 각 필드를 검사하여 매칭되는 키워드 찾기
+        for field, values in data.items():
+            for key, keywords in keyword_mapping.items():
+                if any(keyword.lower() in str(values).lower() for keyword in keywords):
+                    conditions.append(key)
+        
+        return list(set(conditions))  # 중복 제거
+        
+    except Exception as e:
+        logger.error(f"조건 추출 중 오류 발생: {str(e)}")
+        return []
 
 @kindhabit_app.post("/admin/chroma/reinit")
 async def reinit_chroma(background_tasks: BackgroundTasks):
@@ -395,6 +411,130 @@ class MemoryMonitor:
         if current_usage > self.threshold:
             logger.warning(f"Memory usage ({current_usage / 1024 / 1024:.2f} MB) exceeds threshold ({self.threshold / 1024 / 1024:.2f} MB)")
             gc.collect()  # 가비지 컬렉션 실행
+
+async def manage_chroma_database(
+    action: str = "update",
+    force: bool = False,
+    debug: bool = False,
+    test_mode: bool = False
+) -> None:
+    """ChromaDB 관리 함수"""
+    try:
+        chroma_manager = ChromaManager()
+        
+        if action == "reinit":
+            logger.info("ChromaDB 초기화 시작")
+            # medical_terms 컬렉션 초기화
+            collection = chroma_manager.client.get_or_create_collection(
+                name="medical_terms",
+                metadata={"description": "의학 용어 사전"}
+            )
+            
+            # ConfigLoader에서 건강 키워드 가져오기
+            config = ConfigLoader()
+            health_keywords = config.get_health_keywords()
+            
+            # 각 키워드를 ChromaDB에 저장
+            for category_id, category_info in health_keywords.items():
+                if 'medical_terms' in category_info:
+                    for kr_term, en_term in category_info['medical_terms'].items():
+                        # 임베딩 생성
+                        embedding = chroma_manager.embedding_creator.create_embedding(f"{kr_term} {en_term}")
+                        # ChromaDB에 저장
+                        collection.add(
+                            embeddings=[embedding],
+                            documents=[f"{kr_term} ({en_term})"],
+                            metadatas=[{
+                                "term_ko": kr_term,
+                                "term_en": en_term,
+                                "category": category_id
+                            }],
+                            ids=[f"term_{uuid.uuid4()}"]
+                        )
+            
+            logger.info("의학 용어 초기화 완료")
+            
+        elif action == "update":
+            logger.info("ChromaDB 업데이트 시작")
+            # 기존 데이터와 비교하여 새로운 키워드만 추가
+            collection = chroma_manager.client.get_collection("medical_terms")
+            existing_terms = set()
+            
+            # 기존 용어 수집
+            results = collection.get()
+            for metadata in results["metadatas"]:
+                existing_terms.add(metadata["term_ko"])
+            
+            # 새로운 용어 추가
+            config = ConfigLoader()
+            health_keywords = config.get_health_keywords()
+            
+            for category_id, category_info in health_keywords.items():
+                if 'medical_terms' in category_info:
+                    for kr_term, en_term in category_info['medical_terms'].items():
+                        if kr_term not in existing_terms:
+                            embedding = chroma_manager.embedding_creator.create_embedding(f"{kr_term} {en_term}")
+                            collection.add(
+                                embeddings=[embedding],
+                                documents=[f"{kr_term} ({en_term})"],
+                                metadatas=[{
+                                    "term_ko": kr_term,
+                                    "term_en": en_term,
+                                    "category": category_id
+                                }],
+                                ids=[f"term_{uuid.uuid4()}"]
+                            )
+            
+            logger.info("의학 용어 업데이트 완료")
+        
+        if debug:
+            logger.info("디버그 모드로 실행됨")
+            collection = chroma_manager.client.get_collection("medical_terms")
+            count = len(collection.get()["ids"])
+            logger.info(f"현재 저장된 의학 용어 수: {count}")
+            
+        if test_mode:
+            logger.info("테스트 모드로 실행됨")
+            
+    except Exception as e:
+        logger.error(f"ChromaDB 관리 중 오류 발생: {str(e)}")
+        raise
+
+async def get_health_keywords() -> List[str]:
+    """건강 관련 키워드 목록을 반환합니다."""
+    try:
+        chroma_manager = ChromaManager()
+        collection = chroma_manager.client.get_collection('medical_terms')
+        
+        # medical_terms 컬렉션에서 한글 용어 가져오기
+        results = collection.get()
+        keywords = []
+        
+        for metadata in results["metadatas"]:
+            kr_term = metadata.get("term_ko")
+            if kr_term:
+                keywords.append(kr_term)
+        
+        if not keywords:  # 컬렉션이 비어있는 경우 ConfigLoader에서 가져오기
+            logger.warning("medical_terms 컬렉션이 비어있어 ConfigLoader에서 키워드를 가져옵니다.")
+            config = ConfigLoader()
+            health_keywords = config.get_health_keywords()
+            for category_info in health_keywords.values():
+                if 'medical_terms' in category_info:
+                    keywords.extend(category_info['medical_terms'].keys())
+        
+        return list(set(keywords))  # 중복 제거
+        
+    except Exception as e:
+        logger.error(f"건강 키워드 조회 중 오류 발생: {str(e)}")
+        # 오류 발생 시 ConfigLoader에서 가져오기
+        config = ConfigLoader()
+        health_keywords = config.get_health_keywords()
+        keywords = []
+        for category_info in health_keywords.values():
+            if 'medical_terms' in category_info:
+                keywords.extend(category_info['medical_terms'].keys())
+        return list(set(keywords))  # 중복 제거
 
 if __name__ == "__main__":
     config = load_config()

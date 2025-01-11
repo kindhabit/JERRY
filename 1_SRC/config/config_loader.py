@@ -121,18 +121,26 @@ class ConfigLoader:
         """PubMed 설정을 반환합니다."""
         return self._pubmed_settings
 
+    def get_pubmed_search_strategies(self):
+        """PubMed 검색 전략을 반환합니다."""
+        return self._health_mapping.get('search_strategies', {})
+
     def get_health_keywords(self):
-        """건강 키워드를 반환합니다."""
-        keywords = {}
-        for category_id, category in self._health_mapping.get('categories', {}).items():
-            keywords[category_id] = {
-                'name': category.get('name', ''),
-                'display_name': category.get('display_name', ''),
-                'description': category.get('description', ''),
-                'search_terms': category.get('search_terms', []),
-                'medical_terms': category.get('medical_terms', {})
+        """건강 관련 키워드를 반환합니다."""
+        categories = self._health_mapping.get('categories', {})
+        health_keywords = {}
+        
+        for category_id, category_info in categories.items():
+            health_keywords[category_id] = {
+                'name': category_info.get('name'),
+                'display_name': category_info.get('display_name'),
+                'description': category_info.get('description'),
+                'search_terms': category_info.get('search_terms', []),
+                'medical_terms': category_info.get('medical_terms', {}),
+                'reference_ranges': category_info.get('reference_ranges', {})
             }
-        return keywords
+        
+        return health_keywords
 
     def get_health_metrics(self):
         """건강 지표를 반환합니다."""
@@ -140,22 +148,6 @@ class ConfigLoader:
         for category_id, category in self._health_mapping.get('categories', {}).items():
             metrics[category_id] = category.get('related_metrics', [])
         return metrics
-
-    def get_supplements(self):
-        """영양제 정보를 반환합니다."""
-        return self._health_mapping.get('supplements', {}).get('names', {})
-
-    def get_pubmed_categories(self):
-        """PubMed 검색 카테고리를 반환합니다."""
-        return self._health_mapping.get('pubmed', {}).get('categories', {})
-
-    def get_pubmed_category_weights(self):
-        """PubMed 카테고리 가중치를 반환합니다."""
-        return self._health_mapping.get('pubmed', {}).get('category_weights', {})
-
-    def get_pubmed_search_strategies(self):
-        """PubMed 검색 전략을 반환합니다."""
-        return self._health_mapping.get('search_strategies', {})
 
     def get_reference_ranges(self):
         """참조 범위를 반환합니다."""

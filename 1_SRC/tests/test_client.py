@@ -7,9 +7,13 @@ from datetime import datetime
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
+logger.propagate = False  # 중복 로깅 방지
 
 # 테스트 설정
 BASE_URL = "http://localhost:8000"
@@ -70,187 +74,104 @@ sample_health_data = {
     }
 }
 
-async def test_root():
-    """루트 엔드포인트 테스트"""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"{BASE_URL}/") as response:
-            logger.info(f"Status: {response.status}")
-            data = await response.json()
-            logger.info(f"Response: {json.dumps(data, indent=2, ensure_ascii=False)}")
-
-async def test_analyze_request():
-    """건강 데이터 분석 요청 테스트"""
-    logger.info("\n>>> 건강 데이터 분석 요청 테스트")
-    
-    async with aiohttp.ClientSession() as session:
-        data = {
-            "user_id": "test_user_001",
-            "timestamp": datetime.now().isoformat(),
-            "health_metrics": {
-                "blood_pressure": {
-                    "systolic": 135,
-                    "diastolic": 85
-                },
-                "heart_rate": 75,
-                "blood_sugar": {
-                    "fasting": 95,
-                    "post_meal": 145
-                },
-                "cholesterol": {
-                    "total": 210,
-                    "hdl": 45,
-                    "ldl": 140,
-                    "triglycerides": 180
-                },
-                "vitamin_d": 18,
-                "omega_3_index": 4.2
-            },
-            "endoscopy_results": {
-                "colonoscopy": {
-                    "date": "2023-12-15",
-                    "findings": ["용종 2개 (5mm, 3mm) - 완전절제"],
-                    "recommendations": "5년 후 재검사 권고"
-                },
-                "gastroscopy": {
-                    "date": "2023-12-15",
-                    "findings": [
-                        "만성 위염",
-                        "헬리코박터 파일로리 양성"
-                    ],
-                    "recommendations": "헬리코박터 제균 치료 필요"
-                }
-            },
-            # "symptoms": [
-            #     "fatigue",
-            #     "joint_pain",
-            #     "muscle_weakness",
-            #     "dry_skin"
-            # ],
-            # "current_medications": [
-            #     "vitamin_d3_1000iu",
-            #     "omega_3_1000mg",
-            #     "calcium_500mg"
-            # ],
-            "lifestyle_factors": {
-                "exercise_frequency": "2_times_week",
-                "sleep_hours": 6,
-                "stress_level": "high",
-                "diet_type": "irregular",
-                "smoking": "non_smoker",
-                "alcohol": "moderate",
-                "sun_exposure": "low"
-            },
-            "medical_history": {
-                "conditions": [
-                    "hypertension_stage1",
-                    "vitamin_d_deficiency",
-                    "dyslipidemia"
-                ],
-                "family_history": [
-                    "cardiovascular_disease",
-                    "type2_diabetes"
-                ],
-                "allergies": []
-            }
-        }
-        
-        async with session.post(f"{BASE_URL}/api/analyze-request/", json=data) as response:
-            logger.info(f"Status: {response.status}")
-            result = await response.json()
-            logger.info(f"Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
-            return result
-
-async def test_health_categories():
-    """건강 카테고리 조회 테스트"""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"{BASE_URL}/api/health-categories/") as response:
-            logger.info(f"Status: {response.status}")
-            try:
-                data = await response.json()
-            except aiohttp.ContentTypeError:
-                text = await response.text()
-                logger.error(f"Error response: {text}")
-                return
-            logger.info(f"Response: {json.dumps(data, indent=2, ensure_ascii=False)}")
-
 async def test_supplement_interaction():
     """영양제 상호작용 분석 테스트"""
     logger.info("\n>>> 영양제 상호작용 분석 테스트")
-    timeout = aiohttp.ClientTimeout(total=300)  # 5분 타임아웃
+    timeout = aiohttp.ClientTimeout(total=600)  # 10분 타임아웃
     
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        try:
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             # 1. 건강 상태 데이터 전송
             logger.info("\n1. 건강 상태 데이터 전송")
             request_data = sample_health_data
             
-            async with session.post(f"{BASE_URL}/api/supplements/analyze", json=request_data) as response:
-                result = await response.json()
-                logger.info(f"Status: {response.status}")
-                logger.info(f"Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
-                
-                # 2. 1차 추천 결과 확인
-                logger.info("\n2. 1차 추천 결과")
-                recommendations = result.get("recommendations", [])
+            # 첫 번째 요청 및 응답 대기
+            first_response = await session.post(f"{BASE_URL}/api/supplements/analyze", json=request_data)
+            first_response_text = await first_response.text()  # 먼저 텍스트로 받음
+            
+            logger.info(f"Status: {first_response.status}")
+            logger.info(f"Raw Response: {first_response_text}")  # 원본 응답 로깅
+            
+            try:
+                analyze_result = json.loads(first_response_text)
+                logger.info("분석 응답 데이터:")
+                logger.info(f"{json.dumps(analyze_result, indent=2, ensure_ascii=False)}")
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON 파싱 실패: {str(e)}")
+                return None
+            
+            # 응답 확인
+            if first_response.status != 200:
+                logger.error(f"첫 번째 요청 실패: {first_response_text}")
+                return None
+            
+            # 2. 1차 추천 결과 확인
+            logger.info("\n2. 1차 추천 결과")
+            recommendations = analyze_result.get("recommendations", [])
+            if recommendations:
                 logger.info(f"추천된 영양제: {json.dumps(recommendations, indent=2, ensure_ascii=False)}")
-                
-                # 3. 상호작용 분석 요청
-                logger.info("\n3. 상호작용 분석 요청")
-                interaction_data = {
-                    "recommendations": {
-                        "vitamin_d3_1000iu": [],
-                        "omega_3_1000mg": [],
-                        "calcium_500mg": [],
-                        "magnesium_400mg": [],
-                        "vitamin_e_400iu": [],
-                        "iron_65mg": [],
-                        "zinc_50mg": []
-                    }
+            else:
+                logger.warning("추천 결과가 없습니다")
+            
+            # 3. 상호작용 분석 요청
+            logger.info("\n3. 상호작용 분석 요청")
+            interaction_data = {
+                "recommendations": {
+                    "vitamin_d3_1000iu": [],
+                    "omega_3_1000mg": [],
+                    "calcium_500mg": [],
+                    "magnesium_400mg": [],
+                    "vitamin_e_400iu": [],
+                    "iron_65mg": [],
+                    "zinc_50mg": []
                 }
+            }
+            
+            # 두 번째 요청 및 응답 대기
+            second_response = await session.post(
+                f"{BASE_URL}/api/supplements/detailed-analysis",
+                json={
+                    "health_data": request_data,
+                    "initial_recommendations": interaction_data
+                }
+            )
+            second_response_text = await second_response.text()
+            
+            logger.info(f"Status: {second_response.status}")
+            logger.info(f"Raw Response: {second_response_text}")
+            
+            try:
+                interaction_result = json.loads(second_response_text)
+                logger.info("상호작용 분석 응답 데이터:")
+                logger.info(f"{json.dumps(interaction_result, indent=2, ensure_ascii=False)}")
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON 파싱 실패: {str(e)}")
+                return None
+            
+            # 응답 확인
+            if second_response.status != 200:
+                logger.error(f"두 번째 요청 실패: {second_response_text}")
+                return None
+            
+            # 4. 상호작용 분석 결과 확인
+            logger.info("\n4. 상호작용 분석 결과")
+            if interaction_result.get("has_interactions"):
+                logger.info("상호작용이 발견되었습니다:")
+                logger.info(f"상호작용 상세: {json.dumps(interaction_result.get('interactions', []), indent=2, ensure_ascii=False)}")
+                logger.info(f"추가 질문: {json.dumps(interaction_result.get('questions', []), indent=2, ensure_ascii=False)}")
+            else:
+                logger.info("상호작용이 발견되지 않았습니다.")
+            
+            await first_response.release()
+            await second_response.release()
+            return interaction_result
                 
-                async with session.post(
-                    f"{BASE_URL}/api/supplements/detailed-analysis",
-                    json={
-                        "health_data": request_data,
-                        "initial_recommendations": interaction_data
-                    }
-                ) as response:
-                    result = await response.json()
-                    logger.info(f"Status: {response.status}")
-                    logger.info(f"전체 응답 데이터:")
-                    logger.info(f"Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
-                    
-                    # 4. 상호작용 분석 결과 확인
-                    logger.info("\n4. 상호작용 분석 결과")
-                    if result.get("has_interactions"):
-                        logger.info("상호작용이 발견되었습니다:")
-                        logger.info(f"상호작용 상세: {json.dumps(result.get('interactions', []), indent=2, ensure_ascii=False)}")
-                        logger.info(f"추가 질문: {json.dumps(result.get('questions', []), indent=2, ensure_ascii=False)}")
-                    else:
-                        logger.info("상호작용이 발견되지 않았습니다.")
-                    
-                    return result
-                    
-        except Exception as e:
-            logger.error(f"Error during supplement interaction test: {str(e)}")
-            return None
-
-async def main():
-    """메인 함수"""
-    logger.info("=== API 테스트 시작 ===")
-    
-    # 각 테스트 실행
-    await test_root()
-    await test_health_categories()
-    await test_analyze_request()
-    interaction_result = await test_supplement_interaction()
-    
-    # 최종 결과 출력
-    if interaction_result:
-        logger.info("\n=== 영양제 상호작용 분석 최종 결과 ===")
-        logger.info(json.dumps(interaction_result, indent=2, ensure_ascii=False))
-    
-    logger.info("\n=== API 테스트 완료 ===")
+    except asyncio.TimeoutError as e:
+        logger.error(f"Timeout error during supplement interaction test: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Error during supplement interaction test: {str(e)}")
+        return None
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(test_supplement_interaction()) 
