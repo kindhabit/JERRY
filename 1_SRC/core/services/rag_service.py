@@ -7,12 +7,12 @@ from core.vector_db.vector_store_manager import ChromaManager
 import itertools
 from models.health_data import HealthData
 from config.config_loader import CONFIG
-from utils.logger_config import setup_logger
+from utils.logger_config import PrettyLogger
 import json
 import uuid
 from json import JSONEncoder
 
-logger = setup_logger('rag_service')
+logger = PrettyLogger('rag_service')
 
 class DateTimeEncoder(JSONEncoder):
     def default(self, obj):
@@ -21,15 +21,19 @@ class DateTimeEncoder(JSONEncoder):
         return super().default(obj)
 
 class RAGService:
-    def __init__(self, openai_client, chroma_manager):
-        self.openai_client = openai_client
+    def __init__(self, chroma_manager: ChromaManager, openai_client: OpenAIClient):
         self.chroma_manager = chroma_manager
+        self.openai_client = openai_client
+        self.pattern_service = PatternService()
         self.MIN_CONFIDENCE_THRESHOLD = 0.7
 
     async def analyze_health_data(self, health_data):
         try:
+            logger.info("건강 데이터 분석 시작", data=health_data, step="초기화")
+            
             # 건강 데이터 유효성 검증
             if not self._validate_health_data(health_data):
+                logger.error("유효하지 않은 건강 데이터", data=health_data)
                 return {
                     "status": "error",
                     "message": "올바르지 않은 건강 데이터 형식입니다."
@@ -46,6 +50,7 @@ class RAGService:
 
             # 결과의 신뢰도 검증
             if not self._validate_confidence(analysis_result):
+                logger.warning("낮은 신뢰도 분석 결과", data=analysis_result)
                 return {
                     "status": "low_confidence",
                     "message": "분석 결과의 신뢰도가 낮습니다. 더 많은 데이터가 필요합니다.",
@@ -53,8 +58,9 @@ class RAGService:
                 }
 
             return analysis_result
-
+            
         except Exception as e:
+            logger.error("건강 데이터 분석 중 오류", error=e)
             return {
                 "status": "error",
                 "message": "분석 중 오류가 발생했습니다.",
@@ -71,13 +77,6 @@ class RAGService:
             'medical_history'
         }
         return all(field in health_data for field in required_fields)
-
-    def _get_current_medications(self, health_data):
-        """현재 복용 중인 약물 정보 추출"""
-        try:
-            return health_data.get('medical_history', {}).get('medications', [])
-        except:
-            return []
 
     def _validate_confidence(self, analysis_result):
         if 'data_quality' not in analysis_result:
@@ -144,13 +143,18 @@ class RAGService:
         """
 
         try:
+            logger.info("상세 분석 생성 시작", data={"health_data_keys": list(health_data.keys())}, step="분석_시작")
             response = await self.openai_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
+            logger.info("상세 분석 응답 수신", step="응답_수신")
             
-            return json.loads(response['content'])
+            result = json.loads(response['content'])
+            logger.info("상세 분석 완료", data=result, step="분석_완료")
+            return result
             
         except Exception as e:
+            logger.error("상세 분석 생성 중 오류", error=str(e))
             raise Exception(f"상세 분석 생성 중 오류: {str(e)}")
 
     async def analyze_with_patterns(self, query: str, context: dict) -> dict:

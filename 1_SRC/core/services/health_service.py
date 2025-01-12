@@ -5,13 +5,12 @@ from config.config_loader import CONFIG
 from core.vector_db.vector_store_manager import ChromaManager
 from core.services.rag_service import RAGService
 from core.analysis.client_health_analyzer import HealthDataAnalyzer
-from utils.logger_config import setup_logger
-import logging
+from utils.logger_config import PrettyLogger
 import json
 from datetime import datetime, date
 import time
 
-logger = setup_logger('health_service')
+logger = PrettyLogger('health_service')
 
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -48,20 +47,20 @@ class HealthService:
         """건강 지표 분석"""
         try:
             start_time = time.time()
-            logger.info("건강 지표 분석 시작")
+            logger.info("건강 지표 분석 시작", step="초기화")
             
             # 1. 건강 데이터 상세 분석
             analysis_result = await self.health_analyzer.analyze_health_data(
                 health_data.model_dump()
             )
-            logger.info(f"건강 데이터 분석 결과 - def analyze_health_metrics: {self._serialize_json(analysis_result)}")
+            logger.info("건강 데이터 분석 결과", data=analysis_result, step="데이터_분석")
             
             # 2. 1차 추천 (건강 지표별)
-            logger.info("1차 추천 요청 시작")
+            logger.info("1차 추천 요청 시작", step="추천_시작")
             primary_recs = await self._get_primary_recommendations(
                 analysis_result.get("context", {})
             )
-            logger.info(f"1차 추천 결과: {self._serialize_json(primary_recs)}")
+            logger.info("1차 추천 결과", data=primary_recs, step="추천_완료")
             
             # 3. 결과 포맷팅
             result = {
@@ -75,11 +74,11 @@ class HealthService:
                 '분석_일시': datetime.now().isoformat()
             }
             
-            logger.info(f"최종 분석 결과: {self._serialize_json(result)}")
+            logger.info("최종 분석 결과", data=result, step="분석_완료")
             return result
             
         except Exception as e:
-            logger.error(f"건강 지표 분석 중 오류: {str(e)}")
+            logger.error("건강 지표 분석 중 오류", error=str(e))
             raise
 
     async def generate_interaction_notice(self, analysis: Dict) -> Dict:

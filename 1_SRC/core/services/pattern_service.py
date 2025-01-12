@@ -1,13 +1,12 @@
 from typing import Dict, List, Optional
-import logging
 from datetime import datetime
-from utils.system_utils import setup_logger
+from utils.logger_config import get_logger
 from core.vector_db.vector_store_manager import ChromaManager
 from models.health_data import HealthData
 from config.config_loader import CONFIG
 import json
 
-logger = logging.getLogger('pattern_service')
+logger = get_logger('pattern_service')
 
 class PatternService:
     def __init__(self):

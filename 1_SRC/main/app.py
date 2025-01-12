@@ -18,9 +18,10 @@ import uvicorn
 import yaml
 from contextlib import asynccontextmanager
 from api.routes import supplements
-from utils.logger_config import setup_logger
+from utils.logger_config import PrettyLogger
 
-logger = setup_logger('app')
+# 로거 설정
+logger = PrettyLogger('app')
 
 # 메모리 제한 설정
 def limit_memory(max_mem_mb=1024):  # 1GB
@@ -28,7 +29,7 @@ def limit_memory(max_mem_mb=1024):  # 1GB
         soft, hard = resource.getrlimit(resource.RLIMIT_AS)
         resource.setrlimit(resource.RLIMIT_AS, (max_mem_mb * 1024 * 1024, hard))
     except Exception as e:
-        logger.error(f"메모리 제한 설정 실패: {e}")
+        logger.error("메모리 제한 설정 실패", error=e)
 
 # ChromaDB 클라이언트 초기화
 chroma_client = ChromaManager()
@@ -48,13 +49,13 @@ async def lifespan(app: FastAPI):
     # 시작 시
     yield
     # 종료 시
-    logger.info("Shutting down application...")
+    logger.info("애플리케이션 종료 중")
     if 'chroma_client' in globals():
         try:
             await chroma_client.close()
-            logger.info("ChromaDB connection closed")
+            logger.info("ChromaDB 연결 종료")
         except Exception as e:
-            logger.error(f"Error closing ChromaDB connection: {e}")
+            logger.error("ChromaDB 연결 종료 중 오류", error=e)
 
 # FastAPI 애플리케이션 초기화
 kindhabit_app = FastAPI(lifespan=lifespan)
